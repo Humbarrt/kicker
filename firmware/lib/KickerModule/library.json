@@ -1,0 +1,12 @@
+{
+  "name": "KickerModule",
+  "version": "0.1.0",
+  "description": "Connects an Arduino board to a kicker table server over USB serial (kicker module protocol v1).",
+  "keywords": ["kicker", "foosball", "table-soccer", "serial", "json"],
+  "repository": { "type": "git", "url": "https://github.com/Humbarrt/kicker.git" },
+  "frameworks": ["arduino"],
+  "platforms": ["*"],
+  "dependencies": [
+    { "owner": "bblanchon", "name": "ArduinoJson", "version": "^7.0.0" }
+  ]
+}

@@ -1,0 +1,18 @@
+# build output
+/bin/
+/data/
+server/internal/webui/dist/*
+!server/internal/webui/dist/.gitkeep
+
+# PlatformIO
+.pio/
+
+# editors / OS
+.DS_Store
+.idea/
+*.swp
+
+# secrets – never commit
+*.key
+*.passphrase
+.env
