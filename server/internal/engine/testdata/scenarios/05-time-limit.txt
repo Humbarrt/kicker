@@ -1,0 +1,49 @@
+# Timed preset: 300 s of play time, golden goal on a tie (spec 02 §7.2).
+config pause=0s                  # inactivity is tested in 13-lifecycle
+start timed
+wait 100s
+sensor home_goal
+expect score 0:1
+expect playtime 100s
+wait 199s
+expect phase playing
+wait 1s
+expect winner away reason=time
+expect last finished side=away
+
+# Tie at the end: golden goal, the next goal wins.
+start timed
+sensor away_goal
+sensor home_goal
+wait 300s
+expect phase playing
+expect last golden_goal
+expect score 1:1
+wait 60s                      # the clock has run out; golden goal waits
+expect phase playing
+restart                       # survives a restart
+expect phase playing
+sensor away_goal
+expect score 2:1
+expect winner home reason=golden_goal
+
+# Tie with time_tie=draw.
+start win=10 by=1 limit=60s tie=draw
+wait 60s
+expect winner draw reason=time
+expect score 0:0
+
+# A sensor goal stamped after the end of the time does not count, even if the tick is late.
+start win=10 by=1 limit=10s tie=draw
+jump 15s                      # the clock moves on without a tick (busy table)
+sensor home_goal at=-4s       # scored at 11 s: too late
+expect winner draw reason=time
+expect score 0:0
+
+start win=10 by=1 limit=10s tie=draw
+jump 15s
+sensor home_goal at=-6s       # scored at 9 s: counts, then the time is up
+expect score 0:1
+wait 0s
+expect winner away reason=time
+expect games 5

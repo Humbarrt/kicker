@@ -1,0 +1,54 @@
+# Registrations are the game's roster (spec 02 §4 "During a game", §6, §8).
+config guest=1
+coin home 04000007 player=7
+coin away 04000003 player=3
+add away 4
+coin home 04AAAAAA
+start official
+expect written game_started,player_joined,player_joined,player_joined,player_joined
+expect roster home=7,?04AAAAAA away=3,4
+
+# Changes during the game are game events.
+assign 04AAAAAA 12
+expect written player_assigned
+expect roster home=7,12 away=3,4
+remove away 2
+expect written player_left
+expect roster home=7,12 away=3,_
+
+# A player who leaves stays in the game until replaced.
+button home
+expect written none
+expect roster home=7,12 away=3,_
+coin home 04000005 player=5            # rule 4: both left, the side is replaced
+expect written player_left,player_left,player_joined
+expect roster home=5,_ away=3,_
+
+# A player moving sides mid-game.
+coin away 04000055 player=5
+expect written player_left,player_joined
+expect roster home=_,_ away=3,5
+
+# Game end: the coins are ejected and the one-game registrations end; the roster stays.
+sensor home_goal
+sensor home_goal
+sensor home_goal
+sensor home_goal
+sensor home_goal
+expect winner away
+expect eject home,away                 # 5's first coin is still in the home acceptor
+expect regs home=_,_ away=_,_
+expect roster home=_,_ away=3,5
+ejected home                           # the acceptors report the eject
+ejected away
+expect regs home=_,_ away=_,_
+
+# Stale players are not in the next game.
+wait 10s
+coin home 04000007 player=7
+coin away 04000003 player=3
+coin away 04000009 player=9
+button away
+start official
+expect regs home=7,_ away=_,_
+expect roster home=7,_ away=_,_

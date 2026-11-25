@@ -1,0 +1,65 @@
+# Registrations (spec 02 §4): rules 1–6, the guest, stale players, unknown coins.
+config guest=1
+
+# Rule 3: free slots fill up in order.
+coin home 04000007 player=7
+coin home 04000009 player=9
+coin away 04000003 player=3
+expect regs home=7,9 away=3,_
+
+# Rule 1: the same player again (a second coin, or by hand) only adds a source.
+add home 7
+expect regs home=7,9 away=3,_
+
+# Rule 2: the same player on the other side moves – nobody plays against himself.
+coin away 04000077 player=7
+expect regs home=_,9 away=3,7
+
+# Rule 6: both players of a side are still there.
+add away 5
+expect error both players
+expect regs home=_,9 away=3,7
+
+# The guest may play several times at once.
+add home 1
+expect regs home=1,9 away=3,7
+coin away 04000011 player=1          # a coin on a full side doesn't count (no error for a module)
+expect regs home=1,9 away=3,7
+
+# Stale: the button ejects the side's coins, the players stay registered but have left.
+button away
+expect regs home=1,9 away=3*,7*
+# Rule 4: everybody on the side has left – the whole side is replaced, the new player in slot 1.
+coin away 04000005 player=5
+expect regs home=1,9 away=5,_
+
+# Rule 5: one of the two has left – only that one is replaced.
+coin away 04000003 player=3
+button away
+coin away 04000003 player=3          # Mia puts her coin back in: her registration is active again
+expect regs home=1,9 away=5*,3
+coin away 04000006 player=6
+expect regs home=1,9 away=6,3
+
+# Removing by hand.
+remove home 1
+expect regs home=_,9 away=6,3
+remove home 1
+expect error nobody
+
+# Unknown coins: registered with the coin, the player is filled in when it's assigned.
+coin home 04AAAAAA
+expect regs home=?04AAAAAA,9 away=6,3
+assign 04AAAAAA 12
+expect regs home=12,9 away=6,3
+
+# Assigned to someone who is registered already: the two become one, on the coin's side.
+remove home 1
+remove home 2
+coin home 04BBBBBB
+coin home 04CCCCCC
+expect regs home=?04BBBBBB,?04CCCCCC away=6,3
+assign 04BBBBBB 3
+expect regs home=3,?04CCCCCC away=6,_
+assign 04CCCCCC 3                    # Mia's second coin: same side, one registration
+expect regs home=3,_ away=6,_

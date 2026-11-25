@@ -1,0 +1,261 @@
+{
+  "$defs": {
+    "command.anim": {
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "command.brightness": {
+      "properties": {
+        "v": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "v"
+      ],
+      "type": "object"
+    },
+    "command.img": {
+      "properties": {
+        "data": {
+          "description": "base64, up to 600 bytes",
+          "type": "string"
+        },
+        "h": {
+          "description": "picture hash",
+          "type": "string"
+        },
+        "o": {
+          "description": "byte offset",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "h",
+        "o",
+        "data"
+      ],
+      "type": "object"
+    },
+    "command.img_end": {
+      "properties": {
+        "crc32": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "h": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "h",
+        "crc32"
+      ],
+      "type": "object"
+    },
+    "command.state": {
+      "properties": {
+        "clk": {
+          "properties": {
+            "left_ms": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "run": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "left_ms",
+            "run"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "msg": {
+          "description": "text key from cfg txt",
+          "type": "string"
+        },
+        "ph": {
+          "enum": [
+            "idle",
+            "pregame",
+            "playing",
+            "paused",
+            "finished"
+          ],
+          "type": "string"
+        },
+        "pl": {
+          "items": {
+            "properties": {
+              "col": {
+                "description": "#RRGGBB",
+                "type": "string"
+              },
+              "img": {
+                "description": "picture hash or null",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "n": {
+                "description": "name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "n",
+              "col",
+              "img"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "s": {
+          "description": "[own score, opponent score]",
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "ph",
+        "s",
+        "pl"
+      ],
+      "type": "object"
+    },
+    "config": {
+      "properties": {
+        "lang": {
+          "type": "string"
+        },
+        "opp": {
+          "description": "the other side's display name and color",
+          "properties": {
+            "col": {
+              "description": "#RRGGBB",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "col"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "team": {
+          "description": "this side's display name and color",
+          "properties": {
+            "col": {
+              "description": "#RRGGBB",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "col"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "txt": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "translated texts, key → string",
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "event.img_missing": {
+      "properties": {
+        "h": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "h"
+      ],
+      "type": "object"
+    },
+    "params": {
+      "properties": {
+        "anims": {
+          "description": "supported animation names",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "h": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "img": {
+          "description": "picture size in px, 0 = no pictures",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shape": {
+          "enum": [
+            "rect",
+            "round"
+          ],
+          "type": "string"
+        },
+        "w": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "w",
+        "h",
+        "shape",
+        "img",
+        "anims"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "kicker:capability/display@1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "One small screen showing one side's view.",
+  "title": "display@1",
+  "x-roles": [
+    "home",
+    "away"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "$defs": {
+    "config": {
+      "properties": {
+        "debounce_ms": {
+          "description": "default 500",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "threshold_mm": {
+          "description": "default 15",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "event.absent": {
+      "description": "no data"
+    },
+    "event.present": {
+      "description": "no data"
+    }
+  },
+  "$id": "kicker:capability/corner_presence@1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Detects whether a phone is lying on one corner.",
+  "title": "corner_presence@1",
+  "x-roles": [
+    "home_1",
+    "home_2",
+    "away_1",
+    "away_2"
+  ]
+}

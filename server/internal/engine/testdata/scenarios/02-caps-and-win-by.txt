@@ -1,0 +1,53 @@
+# Long preset (10 / win by 2 / max 15): the cap ends a close game.
+start long
+sensor home_goal
+sensor away_goal
+sensor home_goal
+sensor away_goal
+sensor home_goal
+sensor away_goal
+sensor home_goal
+sensor away_goal
+sensor home_goal
+sensor away_goal
+sensor home_goal
+sensor away_goal
+sensor home_goal
+sensor away_goal
+sensor home_goal
+sensor away_goal
+sensor home_goal
+sensor away_goal
+expect score 9:9
+plus home
+plus away
+plus home
+plus away
+plus home
+plus away
+plus home
+plus away
+plus home
+plus away
+expect score 14:14
+expect phase playing
+plus away
+expect score 14:15
+expect winner away reason=score
+
+# Short preset (6 / win by 1 / max 6): first to 6.
+start short
+expect games 2
+plus home
+plus home
+plus home
+plus home
+plus home
+plus away
+plus away
+plus away
+plus away
+plus away
+expect score 5:5
+plus away
+expect winner away

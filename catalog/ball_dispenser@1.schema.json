@@ -1,0 +1,91 @@
+{
+  "$defs": {
+    "command.home": {
+      "description": "no data"
+    },
+    "command.release": {
+      "properties": {
+        "count": {
+          "description": "default 1",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "side": {
+          "enum": [
+            "home",
+            "away"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "side"
+      ],
+      "type": "object"
+    },
+    "command.release_all": {
+      "properties": {
+        "side": {
+          "description": "missing = alternate sides",
+          "enum": [
+            "home",
+            "away"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "event.empty": {
+      "properties": {
+        "side": {
+          "enum": [
+            "home",
+            "away"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "side"
+      ],
+      "type": "object"
+    },
+    "event.released": {
+      "properties": {
+        "count": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "side": {
+          "enum": [
+            "home",
+            "away"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "side",
+        "count"
+      ],
+      "type": "object"
+    },
+    "params": {
+      "properties": {
+        "sense": {
+          "description": "has an exit sensor that sees a ball leave",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "sense"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "kicker:capability/ball_dispenser@1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Releases balls to either side on command.",
+  "title": "ball_dispenser@1"
+}

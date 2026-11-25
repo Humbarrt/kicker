@@ -1,0 +1,531 @@
+{
+  "$defs": {
+    "ack": {
+      "properties": {
+        "id": {
+          "description": "command id (module → server)",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "n": {
+          "description": "event sequence number (server → module)",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "t": {
+          "const": "ack"
+        }
+      },
+      "required": [
+        "t"
+      ],
+      "type": "object"
+    },
+    "announce": {
+      "properties": {
+        "caps": {
+          "items": {
+            "properties": {
+              "c": {
+                "description": "capability id, e.g. goal_sensor or vendor.name/thing",
+                "type": "string"
+              },
+              "cv": {
+                "description": "capability version",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "i": {
+                "description": "instance name, unique within the module",
+                "type": "string"
+              },
+              "p": {
+                "description": "static params"
+              },
+              "w": {
+                "description": "1 = can wake the table",
+                "maximum": 1,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "i",
+              "c",
+              "cv"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "fw": {
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "ver": {
+              "description": "semver",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "ver"
+          ],
+          "type": "object"
+        },
+        "hw": {
+          "description": "board name, shown in the UI",
+          "type": "string"
+        },
+        "mf": {
+          "description": "manifest id vendor/name",
+          "type": "string"
+        },
+        "t": {
+          "const": "announce"
+        },
+        "ts": {
+          "description": "module time in µs since boot; tells a reboot (time went back) from a repeated announce",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "uid": {
+          "description": "stable unique id (flash id, MAC, …)",
+          "type": "string"
+        },
+        "upd": {
+          "enum": [
+            "uf2",
+            "esptool",
+            "none"
+          ],
+          "type": "string"
+        },
+        "v": {
+          "description": "protocol version chosen by the module",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "t",
+        "v",
+        "uid",
+        "ts",
+        "fw",
+        "mf",
+        "caps"
+      ],
+      "type": "object"
+    },
+    "cfg": {
+      "properties": {
+        "d": {
+          "description": "config keys, merged into the current config (partial update)"
+        },
+        "i": {
+          "description": "capability instance; missing = whole module",
+          "type": "string"
+        },
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "t": {
+          "const": "cfg"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "d"
+      ],
+      "type": "object"
+    },
+    "cmd": {
+      "properties": {
+        "c": {
+          "description": "command name",
+          "type": "string"
+        },
+        "d": {},
+        "i": {
+          "type": "string"
+        },
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "t": {
+          "const": "cmd"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "i",
+        "c"
+      ],
+      "type": "object"
+    },
+    "err": {
+      "properties": {
+        "code": {
+          "enum": [
+            "bad_json",
+            "too_long",
+            "unknown_type",
+            "unknown_instance",
+            "unknown_event",
+            "schema",
+            "proto_unsupported",
+            "duplicate_uid"
+          ],
+          "type": "string"
+        },
+        "msg": {
+          "type": "string"
+        },
+        "ref": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "t": {
+          "const": "err"
+        }
+      },
+      "required": [
+        "t",
+        "code",
+        "msg"
+      ],
+      "type": "object"
+    },
+    "evt": {
+      "properties": {
+        "d": {},
+        "e": {
+          "description": "event name",
+          "type": "string"
+        },
+        "i": {
+          "type": "string"
+        },
+        "n": {
+          "description": "sequence number, wraps to 0",
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "t": {
+          "const": "evt"
+        },
+        "ts": {
+          "description": "module time in µs since boot",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "t",
+        "i",
+        "e",
+        "n",
+        "ts"
+      ],
+      "type": "object"
+    },
+    "hello": {
+      "properties": {
+        "st": {
+          "description": "server time in µs",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "t": {
+          "const": "hello"
+        },
+        "v": {
+          "description": "highest protocol version the server supports",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "vmin": {
+          "description": "lowest protocol version the server supports",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "t",
+        "v",
+        "vmin",
+        "st"
+      ],
+      "type": "object"
+    },
+    "identify": {
+      "properties": {
+        "d": {
+          "properties": {
+            "s": {
+              "description": "seconds to blink / beep",
+              "maximum": 60,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "s"
+          ],
+          "type": "object"
+        },
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "t": {
+          "const": "identify"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "d"
+      ],
+      "type": "object"
+    },
+    "log": {
+      "properties": {
+        "l": {
+          "description": "level: debug, info, warning, error",
+          "enum": [
+            "d",
+            "i",
+            "w",
+            "e"
+          ],
+          "type": "string"
+        },
+        "m": {
+          "type": "string"
+        },
+        "t": {
+          "const": "log"
+        }
+      },
+      "required": [
+        "t",
+        "l",
+        "m"
+      ],
+      "type": "object"
+    },
+    "nack": {
+      "properties": {
+        "code": {
+          "enum": [
+            "unknown_command",
+            "bad_args",
+            "busy",
+            "hw_fault",
+            "not_ready"
+          ],
+          "type": "string"
+        },
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "msg": {
+          "type": "string"
+        },
+        "t": {
+          "const": "nack"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "code"
+      ],
+      "type": "object"
+    },
+    "ping": {
+      "properties": {
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "t": {
+          "const": "ping"
+        }
+      },
+      "required": [
+        "t",
+        "id"
+      ],
+      "type": "object"
+    },
+    "pong": {
+      "properties": {
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "t": {
+          "const": "pong"
+        },
+        "ts": {
+          "description": "module time in µs since boot",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "t",
+        "id",
+        "ts"
+      ],
+      "type": "object"
+    },
+    "ready": {
+      "properties": {
+        "adopted": {
+          "description": "unadopted modules are shown in the UI but never affect a game",
+          "type": "boolean"
+        },
+        "sid": {
+          "description": "session id",
+          "type": "string"
+        },
+        "t": {
+          "const": "ready"
+        }
+      },
+      "required": [
+        "t",
+        "sid",
+        "adopted"
+      ],
+      "type": "object"
+    },
+    "reboot": {
+      "properties": {
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "t": {
+          "const": "reboot"
+        }
+      },
+      "required": [
+        "t",
+        "id"
+      ],
+      "type": "object"
+    },
+    "sleep": {
+      "properties": {
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "t": {
+          "const": "sleep"
+        }
+      },
+      "required": [
+        "t",
+        "id"
+      ],
+      "type": "object"
+    },
+    "status": {
+      "properties": {
+        "i": {
+          "type": "string"
+        },
+        "msg": {
+          "type": "string"
+        },
+        "s": {
+          "enum": [
+            "ok",
+            "degraded",
+            "fault"
+          ],
+          "type": "string"
+        },
+        "t": {
+          "const": "status"
+        }
+      },
+      "required": [
+        "t",
+        "s"
+      ],
+      "type": "object"
+    },
+    "update": {
+      "properties": {
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "t": {
+          "const": "update"
+        }
+      },
+      "required": [
+        "t",
+        "id"
+      ],
+      "type": "object"
+    },
+    "wake": {
+      "properties": {
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "t": {
+          "const": "wake"
+        }
+      },
+      "required": [
+        "t",
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "kicker:protocol/v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "One JSON object per line, max 1024 bytes including the newline.",
+  "title": "kicker module protocol v1"
+}

@@ -1,0 +1,13 @@
+# Cloudflare Pages: both association files must be served as JSON, never cached for long
+# (Apple's CDN and Android re-check them).
+/.well-known/apple-app-site-association
+  Content-Type: application/json
+  Cache-Control: max-age=3600
+
+/.well-known/assetlinks.json
+  Content-Type: application/json
+  Cache-Control: max-age=3600
+
+/c
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer

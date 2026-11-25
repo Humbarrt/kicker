@@ -1,0 +1,44 @@
+# Ball side after a goal and dispenser effects (spec 02 §6, §7.1).
+config dispenser=on
+start official first=away
+expect release away
+expect last ball_released side=away
+sensor home_goal              # away scores, home conceded
+expect release home
+expect next_ball home
+sensor away_goal
+expect release away
+plus home
+plus home
+plus home
+plus home
+expect score 5:1
+expect winner home
+expect release none           # no ball after the winning goal
+
+config after_goal_ball=scoring
+start official first=home
+expect release home
+sensor home_goal              # away scores and gets the ball
+expect release away
+sensor home_goal
+expect release away
+
+config after_goal_ball=alternate
+start official                # "Start new game" parks the running game …
+start official first=home     # … "Start now" kicks off
+sensor away_goal
+expect release away
+sensor away_goal
+expect release home
+sensor home_goal
+expect release away
+
+config dispenser=off after_goal_ball=conceding
+start official
+start official
+expect release none
+expect last game_started
+sensor home_goal
+expect release none
+expect next_ball home         # still tracked for resuming

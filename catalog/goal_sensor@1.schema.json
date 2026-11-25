@@ -1,0 +1,30 @@
+{
+  "$defs": {
+    "config": {
+      "properties": {
+        "lockout_ms": {
+          "description": "ignore new triggers after a goal (default 1000)",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "min_block_us": {
+          "description": "shorter interruptions are noise (default 300)",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "event.goal": {
+      "description": "no data"
+    }
+  },
+  "$id": "kicker:capability/goal_sensor@1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Detects a ball that went into one goal.",
+  "title": "goal_sensor@1",
+  "x-roles": [
+    "home_goal",
+    "away_goal"
+  ]
+}

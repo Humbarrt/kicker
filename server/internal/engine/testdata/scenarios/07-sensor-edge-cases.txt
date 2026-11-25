@@ -1,0 +1,13 @@
+# Goals only count while a game is playing (spec 02 §3).
+sensor home_goal
+expect games 0
+start official
+sensor other_role             # not a goal role: ignored
+expect score 0:0
+wait 5s
+sensor home_goal at=-10s      # stamped before kickoff (retried after a replug): ignored
+expect score 0:0
+sensor home_goal at=-2s       # late but after kickoff: counts
+expect score 0:1
+sensor home_goal at=+5s       # module clock ahead: stamped now
+expect score 0:2

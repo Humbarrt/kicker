@@ -1,0 +1,74 @@
+# Kickoff (spec 02 §6): countdown when both sides are registered, restarted by roster changes.
+config first_ball=home
+next official
+
+coin home 04000007 player=7
+expect phase idle                    # both_sides: away is still empty
+coin away 04000003 player=3
+expect phase pregame
+expect kickoff 5s
+wait 3s
+expect kickoff 2s
+coin away 04000004 player=4          # a roster change restarts the countdown
+expect kickoff 5s
+button away                          # away has left: no kickoff
+expect phase idle
+expect kickoff none
+coin away 04000003 player=3
+expect phase pregame
+wait 4s
+expect phase pregame
+wait 1s
+expect phase playing                 # the game started by itself
+expect started_by system
+expect first_ball home
+expect roster home=7,_ away=3,_     # 4 had left: not in the game
+expect regs home=7,_ away=3,_
+
+# Back to idle after the hold, since the game end ends the coin registrations.
+plus home
+plus home
+plus home
+plus home
+plus home
+expect phase finished
+wait 10s
+expect phase idle
+
+# "Start now" during the countdown.
+add home 7
+add away 3
+expect phase pregame
+start official
+expect phase playing
+expect started_by table
+expect kickoff none
+
+# any_player, no delay: the first player starts a game at once.
+config kickoff=any_player delay=0s first_ball=loser_previous
+minus home                           # nothing to take back
+expect error
+plus away
+plus away
+plus away
+plus away
+plus away
+expect winner away
+wait 10s
+add home 9
+expect phase playing
+expect first_ball home              # home lost the previous game
+plus home
+plus home
+plus home
+plus home
+plus home
+wait 10s
+
+# alternate: the opposite of the previous game's first ball.
+config first_ball=alternate delay=2s kickoff=both_sides
+add home 7
+add away 3
+wait 2s
+expect phase playing
+expect first_ball away

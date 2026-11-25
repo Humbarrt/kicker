@@ -1,0 +1,77 @@
+{
+  "$defs": {
+    "command.eject": {
+      "description": "no data"
+    },
+    "event.ejected": {
+      "properties": {
+        "by": {
+          "enum": [
+            "cmd",
+            "button"
+          ],
+          "type": "string"
+        },
+        "uids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "by",
+        "uids"
+      ],
+      "type": "object"
+    },
+    "event.held": {
+      "properties": {
+        "uids": {
+          "description": "coins currently inside (state sync)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "uids"
+      ],
+      "type": "object"
+    },
+    "event.inserted": {
+      "properties": {
+        "uid": {
+          "description": "tag UID as hex string",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uid"
+      ],
+      "type": "object"
+    },
+    "params": {
+      "properties": {
+        "cap": {
+          "description": "how many coins it can hold",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cap"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "kicker:capability/coin_acceptor@1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Holds the NFC coins of one side. Ejects all coins at once.",
+  "title": "coin_acceptor@1",
+  "x-roles": [
+    "home",
+    "away"
+  ]
+}

@@ -1,0 +1,10 @@
+# Registrations survive a restart; the acceptors' state sync corrects them (spec 02 §2).
+coin home 04000007 player=7
+coin home 04000009 player=9
+coin away 04000003 player=3
+restart
+expect regs home=7,9 away=3,_
+# While the server was down, 9 took the coins out with the button and 4 came to the away side.
+held home
+held away 04000003=3 04000004=4
+expect regs home=7*,9* away=3,4

@@ -1,0 +1,16 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TEAMID.BUNDLE_ID"],
+        "components": [
+          {
+            "/": "/c",
+            "?": { "s": "*", "c": "*" },
+            "comment": "Corner tags: /c?s=<server_id>&c=<corner> (spec 03 §11). TEAMID.BUNDLE_ID is filled in M4."
+          }
+        ]
+      }
+    ]
+  }
+}

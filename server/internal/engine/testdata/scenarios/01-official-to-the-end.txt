@@ -1,0 +1,42 @@
+# Official preset (5 / win by 2 / max 8): a full game with sensor goals.
+expect phase idle
+start official
+expect phase playing
+expect score 0:0
+expect last game_started
+
+wait 12s
+sensor home_goal              # ball in the home net: a point for away
+expect score 0:1
+expect last goal side=away
+expect next_ball home         # conceding side gets the ball (default)
+
+sensor away_goal
+sensor away_goal
+sensor away_goal
+sensor away_goal
+expect score 4:1
+sensor home_goal
+sensor home_goal
+sensor home_goal
+expect score 4:4
+sensor away_goal
+expect score 5:4              # 5:4 is not enough, win by 2
+expect phase playing
+sensor away_goal
+expect score 6:4
+expect winner home reason=score
+expect phase finished
+expect last finished side=home
+
+# During the hold a goal only returns the ball.
+sensor away_goal
+expect score 6:4
+wait 9s
+expect phase finished
+wait 1s
+expect phase idle
+expect score 6:4              # the last game stays visible
+sensor home_goal              # idle: ignored
+expect games 1
+expect status 1 finished

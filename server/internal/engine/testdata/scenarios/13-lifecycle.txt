@@ -1,0 +1,151 @@
+# Pause, sleep, wake (spec 02 §7.4, §9, D16).
+config guest=1 first_ball=home pause=5m sleep=3m on_wake=smart
+next official
+
+# Manual pause: the clock stops; the next goal resumes the game and counts.
+coin home 04000007 player=7
+coin away 04000003 player=3
+wait 5s
+expect phase playing                                  # game 1
+wait 10s
+pause
+expect last paused
+expect playtime 10s
+wait 1m
+expect playtime 10s
+sensor home_goal
+expect written resumed,goal
+expect score 0:1
+expect playtime 10s
+pause
+minus away                                            # corrections while paused don't resume
+expect score 0:0
+expect last goal_voided
+plus away                                             # but a goal does
+expect written resumed,goal
+pause
+resume
+expect last resumed
+resume
+expect error                                          # not paused any more
+
+# Inactivity: 5 minutes without anything → paused (backdated), coins out, asleep.
+wait 4m
+expect phase playing
+wait 1m
+expect phase sleeping
+expect power sleep
+expect eject home,away
+expect status 1 paused
+expect reason 1 timeout
+expect recent 1
+expect regs home=_,_ away=_,_
+expect playtime 10s                                   # the idle minutes don't count
+ejected home
+ejected away
+expect phase sleeping                                 # the eject reports don't wake the table
+sensor home_goal
+expect phase sleeping                                 # nor do the goal sensors (off while asleep)
+
+# smart: the paused game continues once at least one of its players is back on each side.
+coin away 04000003 player=3
+expect power wake
+expect phase idle                                     # waiting for a home player of game 1
+expect recent 1
+coin home 04000009 player=9                           # not a player of game 1: no resume yet,
+expect phase pregame                                  # the normal kickoff countdown runs
+coin home 04000007 player=7                           # 7 is back: game 1 continues
+expect phase playing
+expect status 1 active
+expect recent none
+expect regs home=9,7 away=3,_                         # registered for the game after it
+expect roster home=7,_ away=3,_                       # the game keeps its own players
+sensor home_goal
+sensor home_goal
+sensor home_goal
+sensor home_goal
+expect winner away
+expect eject none                                     # the registrations wait for the next game
+wait 10s
+expect phase pregame                                  # 9 and 7 against 3
+start official                                        # "Start now": game 2
+expect roster home=9,7 away=3,_
+sensor away_goal
+
+# Once a new game was started, smart wake leaves the paused game alone: by hand only.
+pause
+wait 4m
+expect phase sleeping                                 # paused by hand, then 3 minutes of nothing
+expect recent 2
+expect status 2 paused
+ejected home
+ejected away
+coin home 04000001 player=1                           # the guest: not a participant → no resume
+expect phase idle
+expect recent 2
+restart
+expect recent 2                                       # still smart-resumable after a restart
+start official                                        # game 3: a new game was started …
+expect recent none                                    # … so game 2 is only resumed by hand now
+restart
+expect recent none                                    # also after a restart
+sensor away_goal
+
+# Resuming from the paused list: the running game with goals goes to the paused list too.
+# Nothing continues by itself afterwards (D16 as changed on 2026-11-23).
+resume_game 2
+expect status 3 paused
+expect reason 3 switched
+expect status 2 active
+sensor away_goal
+sensor away_goal
+sensor away_goal
+sensor away_goal
+expect winner home                                    # game 2 is over
+wait 10s
+expect phase idle                                     # only the guest is registered
+expect status 3 paused                                # game 3 waits in the paused list
+
+# Resuming while the running game has no goals: it is discarded.
+resume_game 3
+expect status 3 active
+start official                                        # "Start new game": game 3 → paused list
+expect status 3 paused
+expect reason 3 new_game
+expect phase idle
+start official                                        # game 4
+resume_game 3
+expect deleted 4
+expect status 3 active
+
+# on_wake: resume always continues, new_game never; the Wake button.
+config on_wake=resume
+pause
+wait 3m
+expect phase sleeping
+wake
+expect power wake
+expect status 3 active
+config on_wake=new_game
+pause
+wait 3m
+coin home 04000009 player=9
+expect phase idle
+expect recent 3
+
+# Abandoned after hours (the table's job), reinstated by a member.
+abandon 3
+expect status 3 abandoned
+expect recent none
+resume_game 3
+expect error
+reinstate 3
+expect status 3 paused
+reinstate 3
+expect error
+
+# Without a game, the table sleeps after sleep_after.
+wait 3m
+expect phase sleeping
+wait 1h
+expect phase sleeping

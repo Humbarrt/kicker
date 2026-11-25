@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Kicker</title>
+<style>
+body{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#222}
+a{color:#1e3a8a}
+.muted{color:#666;font-size:.9rem}
+</style>
+</head>
+<body>
+<!--
+  A corner tag holds https://112233444.xyz/c?s=<server_id>&c=<corner>. With the Kicker app
+  installed, the phone opens the app and this page is never loaded. Without it, the phone opens
+  this page, which forwards to the kicker's own web UI on the local network – the kicker itself
+  is never on the internet (spec 03 §11, spec 08).
+-->
+<h1 id="title">Joining the table …</h1>
+<p id="text">Opening your kicker. If nothing happens, <a id="link" href="https://kicker.local/">open it here</a>.</p>
+<p class="muted" id="hint">Your phone must be on the same Wi-Fi as the kicker.</p>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var s = q.get('s') || '', c = q.get('c') || '';
+  // Only what a corner tag holds: a server id and a corner name.
+  var ok = /^[0-9a-fA-F-]{1,64}$/.test(s) && /^[a-z0-9_]{1,32}$/.test(c);
+  var target = 'https://kicker.local/' + (ok ? 'claim?s=' + encodeURIComponent(s) + '&c=' + encodeURIComponent(c) : '');
+  document.getElementById('link').href = target;
+  if (/^de\b/i.test(navigator.language || '')) {
+    document.documentElement.lang = 'de';
+    document.getElementById('title').textContent = 'Mitspielen …';
+    document.getElementById('text').innerHTML = 'Dein Kicker wird geöffnet. Falls nichts passiert, <a id="link2"></a>.';
+    var a = document.getElementById('link2');
+    a.href = target;
+    a.textContent = 'hier öffnen';
+    document.getElementById('hint').textContent = 'Dein Handy muss im selben WLAN sein wie der Kicker.';
+  }
+  location.replace(target);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+# Smart wake (spec 02 §9): the paused game waits for one of its players per side; if a new game
+# starts first, it stays in the paused games list.
+config guest=1 first_ball=home pause=5m sleep=3m on_wake=smart
+next official
+coin home 04000007 player=7
+coin away 04000003 player=3
+wait 5s
+expect phase playing                                  # game 1: 7 against 3
+sensor home_goal
+wait 5m
+expect phase sleeping
+expect recent 1
+ejected home
+ejected away
+
+# Other players are quicker: the countdown runs out before 7 is back.
+coin home 04000009 player=9
+coin away 04000003 player=3                           # one side of game 1 is back …
+expect phase pregame
+wait 5s
+expect phase playing                                  # … but game 2 (9 against 3) started first
+expect started_by system
+expect recent none
+expect status 1 paused
+coin home 04000007 player=7                           # too late: game 1 stays in the list
+expect status 1 paused
+expect roster home=9,7 away=3,_
+
+# "Start new game" while the same players are registered: no smart resume (only after a wake).
+sensor home_goal
+start official                                        # game 2 → paused list
+expect status 2 paused
+expect phase pregame
+wait 5s
+expect phase playing                                  # game 3, not game 2
+expect status 2 paused

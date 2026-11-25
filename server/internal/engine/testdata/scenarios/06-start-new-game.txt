@@ -1,0 +1,45 @@
+# "Start new game" never abandons (spec 02 §7.4, D16): the running game is paused – or discarded
+# without goals – and the table goes to the kickoff countdown with the current registrations.
+next official
+start official
+start short                   # nobody scored: the first game is discarded
+expect deleted 1
+expect phase idle             # nobody is registered: no countdown
+start short                   # "Start now"
+expect phase playing
+sensor home_goal
+expect score 0:1
+start official                # someone scored: the second game is paused
+expect status 2 paused
+expect reason 2 new_game
+expect recent 2
+expect phase idle
+start official
+expect status 3 active
+expect score 0:0
+restart
+expect score 0:0              # the running game comes back, the paused one stays in the list
+expect recent 2
+
+# With players registered, "Start new game" goes to the countdown.
+add home 7
+add away 3
+expect phase playing
+start official                # game 3 has no goals: discarded
+expect deleted 3
+expect phase pregame
+expect kickoff 5s
+wait 5s
+expect phase playing
+expect roster home=7,_ away=3,_
+
+# Starting after a finished game, during the hold: at once.
+plus home
+plus home
+plus home
+plus home
+plus home
+expect winner home
+start official
+expect phase playing
+expect score 0:0

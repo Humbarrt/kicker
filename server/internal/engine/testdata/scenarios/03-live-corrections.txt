@@ -1,0 +1,58 @@
+# +1 / −1 / undo on the scoreboard page (spec 02 §7.3).
+undo
+expect error no game
+plus home
+expect error no game
+
+start long
+undo
+expect error no goal
+minus home
+expect error no goal
+
+sensor home_goal              # away 1
+sensor away_goal              # home 1
+plus home                     # home 2
+expect score 2:1
+undo                          # takes back the +1 (the last goal of any side)
+expect score 1:1
+expect last goal_voided side=home
+minus away                    # takes back away's sensor goal
+expect score 1:0
+minus away
+expect error no goal
+undo
+expect score 0:0
+undo
+expect error no goal
+
+# Taking a goal back can decide the game: 10:9 → 10:8 with win by 2.
+plus home
+plus away
+plus home
+plus away
+plus home
+plus away
+plus home
+plus away
+plus home
+plus away
+plus home
+plus away
+plus home
+plus away
+plus home
+plus away
+plus home
+plus away
+plus home
+expect score 10:9
+expect phase playing
+minus away
+expect score 10:8
+expect winner home reason=score
+
+# Corrections after the end are edits (M3), not live corrections.
+undo
+expect error no game
+expect score 10:8
