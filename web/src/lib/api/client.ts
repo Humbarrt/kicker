@@ -34,7 +34,13 @@ import type {
 	Overview,
 	RatingChange,
 	TableSettings,
-	TableView
+	TableView,
+	TournamentSummary,
+	TournamentDetail,
+	TournamentOption,
+	TournamentSetupInput,
+	TournamentRules,
+	PlayerTournamentResult
 } from './types.ts';
 
 export type * from './types.ts';
@@ -87,6 +93,23 @@ const del = <T>(p: string) => request<T>('DELETE', p);
 const enc = encodeURIComponent;
 
 export const api = {
+	// tournaments (spec 09)
+	tournaments: () => get<TournamentSummary[]>('/api/tournaments'),
+	tournament: (id: number) => get<TournamentDetail>(`/api/tournaments/${id}`),
+	tournamentOptions: (teams: number, monster: boolean, rules?: TournamentRules) => {
+		const q = new URLSearchParams({ teams: String(teams) });
+		if (monster) q.set('monster', '1');
+		if (rules) for (const [k, v] of Object.entries(rules)) if (v != null) q.set(k, String(v));
+		return get<TournamentOption[]>(`/api/tournaments/options?${q}`);
+	},
+	createTournament: (s: TournamentSetupInput) => post<TournamentDetail>('/api/tournaments', s),
+	updateTournament: (id: number, s: TournamentSetupInput) => put<TournamentDetail>(`/api/tournaments/${id}`, s),
+	tournamentAction: (id: number, action: 'start' | 'pause' | 'continue' | 'abandon' | 'reinstate') =>
+		post<TournamentDetail>(`/api/tournaments/${id}/${action}`),
+	playPairing: (id: number, pairing: string) => post<TournamentDetail>(`/api/tournaments/${id}/play`, { pairing }),
+	deleteTournament: (id: number) => del<void>(`/api/tournaments/${id}`),
+	playerTournaments: (id: number) => get<PlayerTournamentResult[]>(`/api/players/${id}/tournaments`),
+
 	info: () => get<Info>('/api/info'),
 
 	// setup wizard (spec 03 §12)

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeTournament } from '#lib/tournament.svelte.ts';
 	// Who plays on one side (spec 02 §4): the registrations by slot – stale players dimmed, unknown
 	// coins to assign – and coins that don't count. After a game, its roster until somebody
 	// registers again.
@@ -6,10 +7,10 @@
 	import { live } from '#lib/live.svelte.ts';
 	import { players } from '#lib/players.svelte.ts';
 	import { session } from '#lib/session.svelte.ts';
-	import { t, tErr, tPlayer, type Key } from '#lib/i18n.svelte.ts';
+	import { t, tErr, tPlayer, tSide, type Key } from '#lib/i18n.svelte.ts';
 	import PlayerAvatar from '#lib/components/PlayerAvatar.svelte';
 	import AssignCoinDialog from '#lib/components/AssignCoinDialog.svelte';
-	import AddPlayerDialog from '#lib/components/AddPlayerDialog.svelte';
+	import PlayerPicker from '#lib/components/PlayerPicker.svelte';
 
 	let { view, side, changes = {} }: { view: TableView; side: Side; changes?: Record<number, number> } = $props();
 
@@ -25,7 +26,8 @@
 		return (view.coins?.[side] ?? []).filter((c) => !counted.has(c.uid));
 	});
 
-	const canEdit = $derived(session.can('table.players'));
+	// A running tournament decides who plays (spec 09 §8).
+	const canEdit = $derived(session.can('table.players') && !activeTournament.running);
 	const canAdd = $derived(canEdit && (regs.length < 2 || regs.some((r) => r.stale)));
 
 	let assigning = $state('');
@@ -35,6 +37,23 @@
 
 	const viaText = (r: Registration) => r.sources.map((s) => t(('reg.via.' + s.via) as Key)).join(', ');
 	const seatVia = (v: Via) => t(('reg.via.' + v) as Key);
+
+	// Players already at the table, greyed out in the picker.
+	const atTable = $derived.by(() => {
+		const m = new Map<number, string>();
+		for (const s of ['home', 'away'] as const)
+			for (const r of view.registrations?.[s] ?? [])
+				if (r.player_id != null && !r.stale) m.set(r.player_id, t('pick.on_side', { side: tSide(s) }));
+		return m;
+	});
+	async function add(ids: number[]) {
+		error = '';
+		try {
+			live.setTable(await api.register(side, ids[0]));
+		} catch (e) {
+			error = tErr(e);
+		}
+	}
 
 	async function remove(slot: number) {
 		error = '';
@@ -99,4 +118,4 @@
 {#if error}<p class="error mt-2 text-sm">{error}</p>{/if}
 
 <AssignCoinDialog bind:open={assignOpen} uid={assigning} />
-<AddPlayerDialog bind:open={addOpen} {side} />
+<PlayerPicker bind:open={addOpen} max={1} title={t('reg.add_title', { side: tSide(side) })} hint={t('reg.add_hint')} taken={atTable} onpick={add} />

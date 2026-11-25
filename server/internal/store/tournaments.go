@@ -460,16 +460,60 @@ func (s *Store) TournamentPausedGame(ctx context.Context, tournamentID int64) (i
 
 // GamePace measures this table's games for the tournament duration estimate (spec 09 §4): play
 // seconds per goal and the loser's goals per winner goal, over the last 200 finished games that
-// count and lasted under 30 minutes (longer ones were paused). n is how many games it used.
+// count and lasted 1–30 minutes (shorter ones were entered by hand or simulated, longer ones
+// were paused). n is how many games it used.
 func (s *Store) GamePace(ctx context.Context) (secondsPerGoal, loserShare float64, n int, err error) {
 	var ms, goals, winner, loser sql.NullFloat64
 	err = s.r.QueryRowContext(ctx, `SELECT COUNT(*), SUM(ended_at - started_at), SUM(home_goals + away_goals),
 			SUM(max(home_goals, away_goals)), SUM(min(home_goals, away_goals))
 		FROM (SELECT * FROM games INDEXED BY games_finished_order
-			WHERE state = 'finished' AND NOT voided AND winner IS NOT NULL AND ended_at - started_at < 1800000
+			WHERE state = 'finished' AND NOT voided AND winner IS NOT NULL
+				AND ended_at - started_at BETWEEN 60000 AND 1800000
 			ORDER BY ended_at DESC, id DESC LIMIT 200)`).Scan(&n, &ms, &goals, &winner, &loser)
 	if err != nil || n == 0 || goals.Float64 == 0 || winner.Float64 == 0 {
 		return 0, 0, n, err
 	}
 	return ms.Float64 / 1000 / goals.Float64, loser.Float64 / winner.Float64, n, nil
+}
+
+// PlayerTournament is a tournament a player took part in, with the placements from its
+// `finished` event (nil while it runs, or abandoned).
+type PlayerTournament struct {
+	ID         int64
+	Name       string
+	State      string
+	EndedAt    *time.Time
+	Placements json.RawMessage
+}
+
+// PlayerTournaments lists the started tournaments a player took part in, newest first.
+func (s *Store) PlayerTournaments(ctx context.Context, playerID int64) ([]PlayerTournament, error) {
+	rows, err := s.r.QueryContext(ctx, `SELECT t.id, t.name, t.state, t.ended_at,
+			(SELECT e.details FROM tournament_events e WHERE e.tournament_id = t.id AND e.kind = 'finished'
+			 ORDER BY e.id DESC LIMIT 1)
+		FROM tournaments t
+		WHERE t.state <> 'setup' AND EXISTS (SELECT 1 FROM tournament_participants p
+			WHERE p.tournament_id = t.id AND p.player_id = ?)
+		ORDER BY t.started_at DESC, t.id DESC`, playerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PlayerTournament{}
+	for rows.Next() {
+		var pt PlayerTournament
+		var ended sql.NullInt64
+		var details sql.NullString
+		if err := rows.Scan(&pt.ID, &pt.Name, &pt.State, &ended, &details); err != nil {
+			return nil, err
+		}
+		if ended.Valid {
+			pt.EndedAt = Ptr(time.UnixMilli(ended.Int64))
+		}
+		if details.Valid && pt.State == "finished" {
+			pt.Placements = json.RawMessage(details.String)
+		}
+		out = append(out, pt)
+	}
+	return out, rows.Err()
 }

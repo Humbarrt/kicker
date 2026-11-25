@@ -45,6 +45,7 @@ type Settings struct {
 	TieBreaks   []tournament.TieBreak `json:"tie_breaks,omitempty"`
 	Seed        int64                 `json:"seed,omitempty"`         // the draw seed, fixed at the start
 	ManualSeeds bool                  `json:"manual_seeds,omitempty"` // keep the setup's team order instead of seeding by rating
+	PresetID    *int64                `json:"preset_id,omitempty"`    // the preset the stages' rules were copied from (shown in the setup)
 }
 
 // StageSettings is a stage with the rules its games are played with.
@@ -388,7 +389,8 @@ func (s *Service) restore(ctx context.Context) error {
 		return err
 	}
 	s.active = t.ID
-	if g := s.opts.Table.View().Game; g != nil && g.PairingID != 0 {
+	// A tournament game still on the table (not the last finished one the idle table shows).
+	if g := s.opts.Table.View().Game; g != nil && g.Current && g.Status != "finished" && g.PairingID != 0 {
 		_, s.staged, _ = s.opts.Store.TournamentOfPairing(ctx, g.PairingID)
 	}
 	s.log.Info("tournament running", "tournament", t.ID, "name", t.Name)

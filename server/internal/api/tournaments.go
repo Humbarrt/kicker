@@ -230,13 +230,36 @@ func (o Options) tournamentRoutes(api *gin.RouterGroup) {
 		c.JSON(http.StatusOK, out)
 	})
 
+	view.GET("/players/:id/tournaments", func(c *gin.Context) {
+		id, ok := idParam(c, "id")
+		if !ok {
+			return
+		}
+		rs, err := svc.PlayerResults(c.Request.Context(), id)
+		if err != nil {
+			internalError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, rs)
+	})
+
 	api.GET("/tournaments/options", o.Require(auth.TournamentsCreate), func(c *gin.Context) {
 		n, err := strconv.Atoi(c.Query("teams"))
 		if err != nil || n < 0 || n > 256 {
 			fail(c, http.StatusBadRequest, "invalid_input", "teams: 0–256")
 			return
 		}
-		opts, err := svc.Options(c.Request.Context(), n, c.Query("monster") == "1")
+		// Optional rules, so the estimates follow the chosen preset or custom rules.
+		var rules *tournaments.GameRules
+		if c.Query("win_score") != "" {
+			num := func(k string) int { v, _ := strconv.Atoi(c.Query(k)); return v }
+			rules = &tournaments.GameRules{WinScore: num("win_score"), WinBy: num("win_by"), MaxScore: num("max_score"), TimeLimitS: num("time_limit_s")}
+		}
+		opts, err := svc.Options(c.Request.Context(), n, c.Query("monster") == "1", rules)
+		if errors.Is(err, engine.ErrInvalidInput) {
+			fail(c, http.StatusBadRequest, "invalid_rules", err.Error())
+			return
+		}
 		if err != nil {
 			internalError(c, err)
 			return
@@ -519,8 +542,10 @@ func (o Options) tournamentDetail(c *gin.Context, id int64) (TournamentDetail, e
 		}
 		active, staged := svc.Staged()
 		if active == id {
-			d.Staged = staged
 			d.CheckedIn = svc.CheckedIn()
+			if p := st.Pairing(staged); p != nil && p.State == tournament.Ready {
+				d.Staged = staged // not one that already ended
+			}
 		}
 		if sug := st.Suggest(st.Pairing(svc.LastPairing())); sug != nil {
 			d.Suggested = sug.Key

@@ -16,7 +16,8 @@ type Player struct {
 	IsGuest    bool
 	ArchivedAt *time.Time
 	CreatedAt  time.Time
-	AccountID  *int64 // the linked account, if any
+	AccountID  *int64     // the linked account, if any
+	LastPlayed *time.Time // the end of their last rated game; only set by Players
 }
 
 // ErrInUse is returned when a row can't be deleted because other data refers to it.
@@ -25,11 +26,11 @@ var ErrInUse = errors.New("still in use")
 const playerCols = `p.id, p.name, p.color, COALESCE(p.avatar_hash, ''), p.is_guest, p.archived_at, p.created_at,
 	(SELECT a.id FROM accounts a WHERE a.player_id = p.id)`
 
-func scanPlayer(sc interface{ Scan(...any) error }) (Player, error) {
+func scanPlayer(sc interface{ Scan(...any) error }, extra ...any) (Player, error) {
 	var p Player
 	var archived, account sql.NullInt64
 	var created int64
-	err := sc.Scan(&p.ID, &p.Name, &p.Color, &p.AvatarHash, &p.IsGuest, &archived, &created, &account)
+	err := sc.Scan(append([]any{&p.ID, &p.Name, &p.Color, &p.AvatarHash, &p.IsGuest, &archived, &created, &account}, extra...)...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, ErrNotFound
 	}
@@ -44,17 +45,23 @@ func scanPlayer(sc interface{ Scan(...any) error }) (Player, error) {
 
 // Players lists players by name, the guest first; archived ones only with all.
 func (s *Store) Players(ctx context.Context, all bool) ([]Player, error) {
-	rows, err := s.r.QueryContext(ctx, `SELECT `+playerCols+` FROM players p
-		WHERE ? OR p.archived_at IS NULL ORDER BY p.is_guest DESC, p.name COLLATE NOCASE`, all)
+	// The last game uses the index ratings (player_id, ended_at, game_id): one seek per player.
+	rows, err := s.r.QueryContext(ctx, `SELECT `+playerCols+`, (SELECT MAX(r.ended_at) FROM ratings r WHERE r.player_id = p.id)
+		FROM players p WHERE ? OR p.archived_at IS NULL ORDER BY p.is_guest DESC, p.name COLLATE NOCASE`, all)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []Player{}
 	for rows.Next() {
-		p, err := scanPlayer(rows)
+		var last sql.NullInt64
+		p, err := scanPlayer(rows, &last)
 		if err != nil {
 			return nil, err
+		}
+		if last.Valid {
+			t := time.UnixMilli(last.Int64)
+			p.LastPlayed = &t
 		}
 		out = append(out, p)
 	}

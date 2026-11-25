@@ -45,8 +45,10 @@ export async function newPlayer(page: Page, name: string) {
 
 export async function register(page: Page, side: 'home' | 'away', name: string) {
 	await page.getByTestId(`roster-${side}`).getByRole('button', { name: 'Add player' }).click();
-	const dialog = page.getByRole('dialog');
-	await dialog.getByLabel('Player').selectOption({ label: name });
-	await dialog.getByRole('button', { name: 'Add player' }).click();
+	// The player picker: search, then Enter picks the only match.
+	const search = page.locator('dialog[open]').getByTestId('pick-search');
+	await search.fill(name);
+	await search.press('Enter');
+	await expect(page.locator('dialog[open]')).toHaveCount(0);
 	await expect(page.getByTestId(`roster-${side}`).getByTestId('reg')).toContainText(name);
 }

@@ -125,6 +125,9 @@ export type GameView = {
 	first_ball: Side | null;
 	goals: Goal[];
 	roster: { home: Seat[]; away: Seat[] };
+	/** A tournament game: its pairing row, and where team A plays (spec 09). */
+	pairing_id?: number;
+	pairing_a_side?: Side;
 	/** The game counts for nothing (game_voided). */
 	voided: boolean;
 	/** Corrections after the game in force. */
@@ -438,6 +441,153 @@ export type Player = {
 	archived: boolean;
 	has_account: boolean;
 	created_at: number;
+	/** End of the last rated game (player lists only). */
+	last_played?: number;
 };
 
 export type Palette = { colors: string[]; suggested: string };
+
+// --- tournaments (spec 09) ---------------------------------------------------------------------
+
+export type TournamentState = 'setup' | 'running' | 'paused' | 'finished' | 'abandoned';
+export type TeamMode = 'fixed' | 'dyp' | 'monster';
+export type TournamentFormat = 'round_robin' | 'groups' | 'knockout' | 'double_knockout' | 'swiss' | 'monster_dyp';
+
+export interface TournamentStage {
+	format: TournamentFormat;
+	best_of?: number;
+	rounds?: number;
+	double?: boolean;
+	third_place?: boolean;
+	groups?: number;
+	advance?: number;
+	fill_thirds?: boolean;
+	seeding?: 'crossed' | 'reseed';
+	rules?: TournamentRules | null;
+}
+
+export interface TournamentRules {
+	win_score: number;
+	win_by: number;
+	max_score?: number;
+	time_limit_s?: number;
+}
+
+export interface TournamentSettings {
+	team_mode: TeamMode;
+	stages: TournamentStage[];
+	tie_breaks?: string[];
+	seed?: number;
+	manual_seeds?: boolean;
+	/** The preset the stages' rules were copied from; absent = custom rules. */
+	preset_id?: number;
+}
+
+export interface TournamentSetupInput {
+	name: string;
+	settings: TournamentSettings;
+	participants: { player_id: number; team?: number }[];
+}
+
+export interface TournamentSummary {
+	id: number;
+	name: string;
+	state: TournamentState;
+	team_mode: TeamMode;
+	formats: TournamentFormat[];
+	owner_account_id: number | null;
+	created_at: number;
+	started_at: number | null;
+	ended_at: number | null;
+}
+
+export interface TEntrant {
+	team: number;
+	players: number[];
+	bye?: boolean;
+}
+
+export interface TPairing {
+	key: string;
+	stage: number;
+	round: number;
+	pos: number;
+	bracket: string;
+	state: 'waiting' | 'ready' | 'done' | 'bye' | 'skipped';
+	a: TEntrant | null;
+	b: TEntrant | null;
+	wins_a: number;
+	wins_b: number;
+	goals_a: number;
+	goals_b: number;
+	winner: 'a' | 'b' | '';
+	walkover: boolean;
+	best_of: number;
+	games: { game_id: number; a_side: 'home' | 'away'; winner: 'a' | 'b' | ''; goals_a: number; goals_b: number }[];
+}
+
+export interface TStanding {
+	id: number;
+	players: number[];
+	seed: number;
+	played: number;
+	won: number;
+	lost: number;
+	points: number;
+	per_game: number;
+	games_won: number;
+	games_lost: number;
+	goals_for: number;
+	goals_against: number;
+	buchholz: number;
+}
+
+export interface TStage {
+	index: number;
+	format: TournamentFormat;
+	best_of: number;
+	done: boolean;
+	groups: { name: string; teams: TEntrant[]; standings: TStanding[] }[];
+	pairings: TPairing[];
+	standings: TStanding[];
+	sat_out?: number[][];
+}
+
+export interface TEstimate {
+	pairings: number;
+	up_to: boolean;
+	games: number;
+	minutes: number;
+	min_games_per_team: number;
+}
+
+export interface TournamentDetail extends TournamentSummary {
+	settings: TournamentSettings;
+	participants: { player_id: number; team: number | null; seed: number; dropped: boolean }[];
+	teams: TEntrant[];
+	stages: TStage[];
+	placements: { place: number; team: number; players: number[] }[];
+	ready: string[];
+	suggested: string;
+	staged: string;
+	checked_in: number[];
+	finished: boolean;
+	estimate: TEstimate | null;
+	events: { at: number; account_id: number | null; kind: string; details: Record<string, unknown> }[];
+	can: { edit: boolean; run: boolean; play: boolean; manage: boolean };
+	preview: boolean;
+}
+
+export interface TournamentOption {
+	name: string;
+	stages: TournamentStage[];
+	estimate: TEstimate;
+}
+
+export interface PlayerTournamentResult {
+	id: number;
+	name: string;
+	state: TournamentState;
+	ended_at: number | null;
+	place: number;
+}

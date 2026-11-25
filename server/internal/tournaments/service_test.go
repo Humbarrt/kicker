@@ -3,6 +3,7 @@ package tournaments
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"path/filepath"
@@ -73,7 +74,12 @@ func (r *rig) eventually(what string, ok func() bool) {
 	r.t.Helper()
 	for deadline := time.Now().Add(5 * time.Second); !ok(); time.Sleep(5 * time.Millisecond) {
 		if time.Now().After(deadline) {
-			r.t.Fatalf("timed out waiting for %s (table %s)", what, r.tbl.View().Phase)
+			v := r.tbl.View()
+			gs := ""
+			if v.Game != nil {
+				gs = fmt.Sprintf("game %d %s %d:%d", v.Game.ID, v.Game.Status, v.Game.Home, v.Game.Away)
+			}
+			r.t.Fatalf("timed out waiting for %s (table %s, %s)", what, v.Phase, gs)
 		}
 	}
 }
@@ -108,12 +114,17 @@ func (r *rig) win(side engine.Side, goals int) {
 	if side == engine.Away {
 		role = "home_goal"
 	}
+	id := r.tbl.View().Game.ID
 	for range goals {
 		if err := r.tbl.Do(r.ctx, engine.SensorGoal{Role: role}); err != nil {
 			r.t.Fatal(err)
 		}
 	}
-	r.eventually("game end", func() bool { return r.tbl.View().Phase == string(engine.PhaseFinished) })
+	// The game itself, not the table: the next game of a best-of follows within milliseconds.
+	r.eventually("game end", func() bool {
+		g, _, err := r.st.Game(r.ctx, id)
+		return err == nil && g.State == "finished"
+	})
 }
 
 func (r *rig) state(id int64) *tournament.State {

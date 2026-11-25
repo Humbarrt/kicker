@@ -151,8 +151,13 @@ func (s *Service) Reinstate(ctx context.Context, id int64, author *int64) error 
 
 // Options lists the formats for some number of teams (or players, Monster DYP), sorted by the
 // estimated duration with this table's pace (spec 09 §4).
-func (s *Service) Options(ctx context.Context, n int, monster bool) ([]tournament.Option, error) {
-	rules, _, err := s.rulesOf(ctx, Settings{}, 0)
+// With rules nil the estimates use the table's current preset.
+func (s *Service) Options(ctx context.Context, n int, monster bool, gr *GameRules) ([]tournament.Option, error) {
+	var set Settings
+	if gr != nil {
+		set.Stages = []StageSettings{{Rules: gr}}
+	}
+	rules, _, err := s.rulesOf(ctx, set, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -222,4 +227,40 @@ func (s *Service) LastPairing() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.last
+}
+
+// PlayerResult is a tournament on a player's profile: their place (0 = none, or not finished).
+type PlayerResult struct {
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	State   string `json:"state"`
+	EndedAt *int64 `json:"ended_at"`
+	Place   int    `json:"place"`
+}
+
+// PlayerResults lists the tournaments a player took part in (spec 09 §12: profile).
+func (s *Service) PlayerResults(ctx context.Context, playerID int64) ([]PlayerResult, error) {
+	ts, err := s.opts.Store.PlayerTournaments(ctx, playerID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PlayerResult, 0, len(ts))
+	for _, t := range ts {
+		r := PlayerResult{ID: t.ID, Name: t.Name, State: t.State}
+		if t.EndedAt != nil {
+			r.EndedAt = store.Ptr(t.EndedAt.UnixMilli())
+		}
+		var places []tournament.Placement
+		if len(t.Placements) > 0 && json.Unmarshal(t.Placements, &places) == nil {
+			for _, p := range places {
+				for _, id := range p.Players {
+					if id == playerID && (r.Place == 0 || p.Place < r.Place) {
+						r.Place = p.Place
+					}
+				}
+			}
+		}
+		out = append(out, r)
+	}
+	return out, nil
 }

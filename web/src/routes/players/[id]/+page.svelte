@@ -1,11 +1,12 @@
 <script lang="ts">
 	// Player profile: record, ratings with their history, streaks, teammates and opponents, recent games.
 	import { page } from '$app/state';
-	import { api, type Coin, type GameSummary, type Player, type PlayerStats, type Relation } from '#lib/api/client.ts';
+	import { api, type Coin, type GameSummary, type Player, type PlayerStats, type PlayerTournamentResult, type Relation } from '#lib/api/client.ts';
 	import { players } from '#lib/players.svelte.ts';
 	import { live } from '#lib/live.svelte.ts';
 	import { session } from '#lib/session.svelte.ts';
-	import { i18n, t, tErr, tPlayer } from '#lib/i18n.svelte.ts';
+	import { i18n, t, tErr, tPlayer, type Key } from '#lib/i18n.svelte.ts';
+	import { dateTime } from '#lib/format.ts';
 	import PlayerAvatar from '#lib/components/PlayerAvatar.svelte';
 	import PlayerEditor from '#lib/components/PlayerEditor.svelte';
 	import RatingChart from '#lib/components/RatingChart.svelte';
@@ -20,6 +21,13 @@
 	let games = $state<GameSummary[]>([]);
 	let chartKey = $state<'solo' | 'team' | null>(null);
 	let allRelations = $state(false);
+	let tourneys = $state<PlayerTournamentResult[]>([]);
+	$effect(() => {
+		const id = Number(page.params.id);
+		void live.tournamentRev;
+		if (session.can('view.tournaments')) api.playerTournaments(id).then((r) => (tourneys = r)).catch(() => {});
+	});
+	const medals = $derived([1, 2, 3].map((n) => tourneys.filter((x) => x.place === n).length));
 
 	$effect(() => {
 		const id = Number(page.params.id);
@@ -194,6 +202,26 @@
 					</div>
 				</section>
 			{/if}
+		{/if}
+
+		{#if tourneys.length}
+			<section class="card p-2" data-testid="player-tournaments">
+				<div class="flex flex-wrap items-baseline gap-3 px-3 pt-2 pb-1">
+					<h2 class="h2 flex-1">{t('tourn.profile')}</h2>
+					{#each ['🥇', '🥈', '🥉'] as m, i (m)}{#if medals[i]}<span class="text-sm tabular-nums">{m} {medals[i]}</span>{/if}{/each}
+				</div>
+				<ul class="divide-y divide-stone-100">
+					{#each tourneys as x (x.id)}
+						<li>
+							<a href="/tournaments/{x.id}" class="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-stone-50">
+								<span class="w-8 text-lg">{['', '🥇', '🥈', '🥉'][x.place] ?? ''}</span>
+								<span class="min-w-0 flex-1 truncate">{x.name}</span>
+								<span class="muted">{x.state === 'finished' ? dateTime(x.ended_at, i18n.lang) : t(('tourn.state.' + x.state) as Key)}</span>
+							</a>
+						</li>
+					{/each}
+				</ul>
+			</section>
 		{/if}
 
 		{#if coins && coins.length}

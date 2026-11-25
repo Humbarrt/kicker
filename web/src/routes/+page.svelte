@@ -12,6 +12,8 @@
 	import SideRoster from '#lib/components/SideRoster.svelte';
 	import Overview from '#lib/components/Overview.svelte';
 	import PausedGames from '#lib/components/PausedGames.svelte';
+	import TournamentPanel from '#lib/components/tournament/TournamentPanel.svelte';
+	import { activeTournament } from '#lib/tournament.svelte.ts';
 
 	const view = $derived(live.table);
 	const pregame = $derived(view?.phase === 'pregame');
@@ -93,6 +95,7 @@
 	{#if !view && !session.can('view.live')}
 		<p class="card text-center">{t('board.hidden')} <a class="underline" href="/login">{t('nav.login')}</a></p>
 	{:else}
+		<TournamentPanel />
 		<section class="card overflow-hidden p-0">
 			<div class="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 px-5 py-3 text-sm">
 				<span class="chip {playing ? 'bg-emerald-100 text-emerald-800' : pausedOnTable ? 'bg-amber-100 text-amber-800' : ''}" data-testid="phase">
@@ -202,7 +205,7 @@
 					{#if session.can('table.control') && pausedOnTable}
 						<button class="btn btn-primary" disabled={busy} onclick={() => run(api.resume)}>{t('board.resume')}</button>
 					{/if}
-					{#if session.can('table.control')}
+					{#if session.can('table.control') && !activeTournament.running}
 						{#if pregame}
 							<button class="btn" onclick={() => (dialogOpen = true)}>{t('board.start')}…</button>
 							<button class="btn btn-primary" disabled={busy} onclick={() => run(() => api.start())}>{t('board.start_now')}</button>
@@ -236,7 +239,6 @@
 		{#if session.info?.sim}
 			<SimPanel />
 		{/if}
-		<!-- M6: recent tournaments continue the page here. -->
 	{/if}
 </main>
 

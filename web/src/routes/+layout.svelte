@@ -46,6 +46,7 @@
 		{ href: '/', label: t('nav.scoreboard'), show: true },
 		{ href: '/games', label: t('nav.games'), show: session.can('view.stats'), prefix: '/games' },
 		{ href: '/players', label: t('nav.players'), show: session.can('view.stats'), prefix: '/players' },
+		{ href: '/tournaments', label: t('nav.tournaments'), show: session.can('view.tournaments'), prefix: '/tournaments' },
 		{ href: settings[0]?.href ?? '/settings', label: t('nav.settings'), show: settings.length > 0, prefix: '/settings' }
 	]);
 

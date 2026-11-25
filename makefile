@@ -25,7 +25,7 @@ help:
 generate:
 	cd server && go generate ./...
 
-dev: generate
+dev: generate web
 	@trap 'kill 0' INT TERM EXIT; \
 	(cd server && go run ./cmd/kicker serve --sim --dev --data ../data) & \
 	(cd web && pnpm install --frozen-lockfile --silent && pnpm dev) & \

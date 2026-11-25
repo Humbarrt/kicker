@@ -16,6 +16,8 @@ class Live {
 	modulesRev = $state(0);
 	/** Counts "stats" messages: ratings and stats changed, re-read them. */
 	statsRev = $state(0);
+	/** Counts "tournament" messages: a tournament changed (state, results, the pairing on the table). */
+	tournamentRev = $state(0);
 
 	#es: EventSource | null = null;
 	#console = new Set<ConsoleListener>();
@@ -36,6 +38,7 @@ class Live {
 		es.addEventListener('table', (e) => this.setTable(JSON.parse((e as MessageEvent).data)));
 		es.addEventListener('modules', () => this.modulesRev++);
 		es.addEventListener('stats', () => this.statsRev++);
+		es.addEventListener('tournament', () => this.tournamentRev++);
 		es.addEventListener('accounts', () => session.refresh()); // admins: sign-ups (badge)
 		es.addEventListener('console', (e) => {
 			const line = JSON.parse((e as MessageEvent).data) as ConsoleLine;

@@ -36,11 +36,16 @@ type Player struct {
 	Archived   bool   `json:"archived"`
 	HasAccount bool   `json:"has_account"`
 	CreatedAt  int64  `json:"created_at"`
+	LastPlayed int64  `json:"last_played,omitempty"` // end of the last rated game (lists only), for "recent first"
 }
 
 func view(p store.Player) Player {
-	return Player{ID: p.ID, Name: p.Name, Color: p.Color, Avatar: p.AvatarHash, Guest: p.IsGuest,
+	v := Player{ID: p.ID, Name: p.Name, Color: p.Color, Avatar: p.AvatarHash, Guest: p.IsGuest,
 		Archived: p.ArchivedAt != nil, HasAccount: p.AccountID != nil, CreatedAt: p.CreatedAt.UnixMilli()}
+	if p.LastPlayed != nil {
+		v.LastPlayed = p.LastPlayed.UnixMilli()
+	}
+	return v
 }
 
 // Errors.

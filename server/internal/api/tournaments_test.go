@@ -194,6 +194,11 @@ func TestTournamentRoutes(t *testing.T) {
 	if code := f.do(t, f.admin, "GET", fmt.Sprintf("/api/tournaments/%d", mine.ID), "", &e); code != 404 {
 		t.Errorf("deleted: %d", code)
 	}
+	var results []tournaments.PlayerResult
+	if code := f.do(t, "", "GET", fmt.Sprintf("/api/players/%d/tournaments", f.players[0]), "", &results); code != 200 ||
+		len(results) != 1 || results[0].ID != id || results[0].Place != 0 {
+		t.Errorf("player's tournaments %d %+v", code, results) // the deleted one was never started
+	}
 	if len(d.Events) < 5 || d.Events[0].Kind != "created" {
 		t.Errorf("history %+v", d.Events)
 	}

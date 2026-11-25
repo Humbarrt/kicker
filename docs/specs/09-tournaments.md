@@ -36,7 +36,7 @@ Where D11 left gaps, §15 records how they were decided.
    - **Monster DYP:** new random partner every round, individual ranking (§6.6).
    - Odd number of players for 2v2: one solo team (fixed, DYP), or one player sits out each round in rotation (Monster DYP) (D11).
 3. **Format** (§6): every option that fits the number of teams, **sorted by estimated duration**, each showing: number of games, estimated time, minimum games per team (D11). The first one is preselected.
-4. **Rules per stage:** the preset (default: the "Tournament" preset – time limit + golden goal, no draws), games per pairing (1 | best of 3 | best of 5), e.g. "final best of 3". Who gets the first ball (§7.3).
+4. **Rules:** chosen like "New game" – one of the presets (default: "Official") or custom rules (goals to win, lead needed, max goals, time limit). The rules are copied into the tournament (a later preset edit doesn't change it; `settings.preset_id` only remembers the choice for the setup page) and always end in golden goal at the time limit, never a draw. The format options' estimates follow the chosen rules. Per stage: games per pairing (1 | best of 3 | best of 5), e.g. "final best of 3". Who gets the first ball (§7.3).
 5. **Placements:** 3rd place game or shared 3rd (knockout formats); tie-breaks (§9).
 6. **Start** → `running`. The teams and the bracket are fixed now; DYP draws happen here.
 
@@ -160,7 +160,7 @@ Every team plays every other team once (twice: setting). Rounds by the circle me
   - `games.pairing_id` → that row, and `games.pairing_a_side` (home/away): where team A played, since sides swap every game
   - `tournament_events` (id, tournament_id, at, account_id, kind, details JSON): created, edited, started, paused, resumed, finished, abandoned, reinstated, player_replaced, dropout, walkover, manual_result, rebuilt.
 - A pairing's result = its walkover, or its finished games that aren't voided, in the order they ended.
-- Package `tournaments` (the service, I/O) runs the active tournament: it starts it (DYP draw, seeding by rating unless the setup's order is kept), turns the engine's **tournament mode** on (`engine.SetTournament`), collects check-ins (the engine reports a tournament player's coin instead of registering it), stages pairings (`engine.StagePairing`: players, the stage's rules – or the current preset with golden goal –, sides, first ball; then the normal kickoff countdown), stages the next game of a best-of by itself, finishes the tournament, and pauses it when the table sleeps during a tournament game. A running tournament is restored after a restart.
+- Package `tournaments` (the service, I/O) runs the active tournament: it starts it (DYP draw, seeding by rating unless the setup's order is kept), turns the engine's **tournament mode** on (`engine.SetTournament`), collects check-ins (the engine reports a tournament player's coin instead of registering it), stages pairings (`engine.StagePairing`: players, the stage's rules (copied from the chosen preset or custom; older setups without rules: the current preset), with golden goal, sides, first ball; then the normal kickoff countdown), stages the next game of a best-of by itself, finishes the tournament, and pauses it when the table sleeps during a tournament game. A running tournament is restored after a restart.
 - The engine's game carries its pairing (`Game.Pairing`: row id + where team A plays), saved with the game.
 - SSE topic `tournament` (state changes, results).
 
