@@ -211,7 +211,7 @@
 		{#if options.length}
 			<div class="grid gap-2 sm:grid-cols-2" data-testid="format-options">
 				{#each options as o, i (i)}
-					<label class="cursor-pointer rounded-xl border p-3 {same(o.stages) ? 'border-emerald-600 bg-emerald-50' : 'border-stone-200'}">
+					<label data-option={o.name} class="cursor-pointer rounded-xl border p-3 {same(o.stages) ? 'border-emerald-600 bg-emerald-50' : 'border-stone-200'}">
 						<input type="radio" class="sr-only" name="format" checked={same(o.stages)} onchange={() => choose(o)} />
 						<span class="block font-medium">{optionName(o)}</span>
 						<span class="block text-xs text-stone-500">{estimateText(o.estimate)} · {t('tourn.min_games', { n: o.estimate.min_games_per_team })}</span>

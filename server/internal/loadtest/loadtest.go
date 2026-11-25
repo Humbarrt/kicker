@@ -31,6 +31,7 @@ import (
 	"github.com/Humbarrt/kicker/server/internal/stats"
 	"github.com/Humbarrt/kicker/server/internal/store"
 	"github.com/Humbarrt/kicker/server/internal/table"
+	"github.com/Humbarrt/kicker/server/internal/tournaments"
 	"github.com/Humbarrt/kicker/server/internal/webui"
 )
 
@@ -43,9 +44,13 @@ type Options struct {
 	Requests int     // requests per measured endpoint (default 200)
 	Clients  int     // SSE clients (default 50)
 	Scale    float64 // multiplies every time budget (default 1 = the Raspberry Pi 4 budgets)
-	Seed     uint64
-	Out      io.Writer
-	Log      io.Writer // the server's log (default: none)
+	// The tournaments played to the end (M6): a double knockout of TournamentTeams 1-player teams
+	// (default 64) and a Monster DYP of MonsterPlayers (default 40).
+	TournamentTeams int
+	MonsterPlayers  int
+	Seed            uint64
+	Out             io.Writer
+	Log             io.Writer // the server's log (default: none)
 }
 
 // Budgets of spec 04 §4, for the Raspberry Pi 4.
@@ -100,6 +105,12 @@ func (o *Options) defaults() {
 	}
 	if o.Scale <= 0 {
 		o.Scale = 1
+	}
+	if o.TournamentTeams <= 0 {
+		o.TournamentTeams = 64
+	}
+	if o.MonsterPlayers <= 0 {
+		o.MonsterPlayers = 40
 	}
 	if o.Seed == 0 {
 		o.Seed = 42
@@ -197,14 +208,29 @@ func Run(ctx context.Context, o Options) (Report, error) {
 	t0 = time.Now()
 	<-cache.Idle()
 	rep.Results = append(rep.Results, result("start-up: every stats view computed", []time.Duration{time.Since(t0)}, 0))
+	var tsvc *tournaments.Service
 	tbl := table.New(table.Options{Store: st, Bus: b, Config: engine.DefaultConfig(), Logger: log,
-		OnGameFinished: func(id int64) { go proj.GameFinished(runCtx, id) }})
+		OnGameFinished: func(id int64) {
+			go proj.GameFinished(runCtx, id)
+			tsvc.GameFinished(id)
+		},
+		OnCheckIn: func(c engine.CheckIn) { tsvc.CheckIn(c) },
+		OnPhase:   func(from, to engine.Phase) { tsvc.Phase(from, to) }})
+	tsvc = tournaments.New(tournaments.Options{Store: st, Table: tbl, Bus: b, Logger: log})
 	tableDone := make(chan error, 1)
 	go func() { tableDone <- tbl.Run(runCtx) }()
 	select {
 	case <-tbl.Ready():
 	case err := <-tableDone:
 		return rep, fmt.Errorf("table: %w", err)
+	}
+	tsvcDone := make(chan struct{})
+	go func() {
+		tsvc.Run(runCtx)
+		close(tsvcDone)
+	}()
+	if err := abandonLeftovers(ctx, tsvc); err != nil {
+		return rep, err
 	}
 	ob, err := onboarding.New(ctx, onboarding.Options{Store: st, Auth: as})
 	if err != nil {
@@ -217,7 +243,7 @@ func Run(ctx context.Context, o Options) (Report, error) {
 	done := make(chan struct{})
 	defer close(done)
 	router := api.NewRouter(api.Options{ServerID: "loadtest", DataDir: o.DataDir, Auth: as, Onboarding: ob, Players: ps, Table: tbl,
-		Ratings: st, History: st, Stats: stats.Reader{St: st, Cache: cache}, Presets: st, Bus: b, Done: done,
+		Ratings: st, History: st, Stats: stats.Reader{St: st, Cache: cache}, Presets: st, Tournaments: tsvc, Bus: b, Done: done,
 		UI: webui.HandlerFS(fstest.MapFS{})})
 	srv := httptest.NewServer(router)
 	defer srv.Close()
@@ -274,8 +300,16 @@ func Run(ctx context.Context, o Options) (Report, error) {
 	}
 	rep.Results = append(rep.Results, res...)
 
+	// 4. Tournaments played to the end on the table (M6).
+	res, err = measureTournaments(ctx, srv.URL, tbl, st, tsvc, o)
+	if err != nil {
+		return rep, err
+	}
+	rep.Results = append(rep.Results, res...)
+
 	cancel()
 	<-tableDone
+	<-tsvcDone // its last work done before the database closes
 	print(o.Out, rep, o.Scale)
 	return rep, nil
 }
@@ -474,7 +508,7 @@ func measureHTTP(ctx context.Context, base string, st *store.Store, o Options) (
 	}{
 		{"GET /api/overview", func() string { return "/api/overview" }},
 		{"GET /api/leaderboard (team)", func() string { return "/api/leaderboard?key=team" }},
-		{"GET /api/leaderboard (1 against 1)", func() string { return "/api/leaderboard?key=solo" }},
+		{"GET /api/leaderboard (solo)", func() string { return "/api/leaderboard?key=solo" }},
 		{"GET /api/players/:id/stats", func() string { return fmt.Sprintf("/api/players/%d/stats", pick()) }},
 		{"GET /api/games (first page)", func() string { return "/api/games?limit=30" }},
 		{"GET /api/games (two players, against)", func() string {

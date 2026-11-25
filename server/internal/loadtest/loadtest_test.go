@@ -25,19 +25,20 @@ func TestSmallRun(t *testing.T) {
 	}
 	var out bytes.Buffer
 	dir := t.TempDir()
-	rep, err := Run(context.Background(), Options{DataDir: dir, Games: 300, Players: 12, Requests: 3, Clients: 3, Scale: 100, Out: &out})
+	rep, err := Run(context.Background(), Options{DataDir: dir, Games: 300, Players: 12, Requests: 3, Clients: 3, Scale: 100, Out: &out,
+		TournamentTeams: 6, MonsterPlayers: 9})
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
 	if rep.Games != 300 || rep.Events < 300*6 || len(rep.Results) < 10 {
 		t.Errorf("report: %+v", rep)
 	}
-	if !strings.Contains(out.String(), "goal → SSE message at 3 clients") {
+	if !strings.Contains(out.String(), "goal → SSE message at 3 clients") || !strings.Contains(out.String(), "9-player Monster DYP: tournament page") {
 		t.Errorf("output:\n%s", out.String())
 	}
 	// A second run reuses the games.
 	out.Reset()
-	if rep, err := Run(context.Background(), Options{DataDir: dir, Requests: 2, Clients: 2, Scale: 100, Out: &out}); err != nil || rep.Games < 300 {
+	if rep, err := Run(context.Background(), Options{DataDir: dir, Requests: 2, Clients: 2, Scale: 100, Out: &out, TournamentTeams: 4, MonsterPlayers: 4}); err != nil || rep.Games < 300 {
 		t.Errorf("rerun: %v %+v", err, rep)
 	}
 }

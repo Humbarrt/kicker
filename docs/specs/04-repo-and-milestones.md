@@ -1,7 +1,7 @@
 # Spec 04: Repository layout, tooling + milestones
 
 Status: **Approved v6** (2026-11-23: software-first build order, §7). Turns specs 00–03 into a codebase and a build order.
-Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6 in progress: tasks 1–6 ✓, next task 7.
+Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's).
 
 ## 1. One monorepo
 Everything lives in one **private** git repository on the owner's GitHub (`Humbarrt/kicker`), so the protocol, the server, the Arduino library and the UI always change together, and one version tag produces one release (D15). The old attempts live in a separate `kicker_old` folder and are not part of the repo.
@@ -105,6 +105,7 @@ kicker/
 - a stats view computed in the background: < 500 ms each (it never holds up a request, decision B)
 - rating replay after editing the oldest game: < 3 s (within the tolerance of decision A)
 - goal → SSE message at the browser: < 50 ms; goal → dispenser `release` command: < 10 ms
+- tournaments (M6): a 64-team double knockout and a 40-player Monster DYP played to the end on the table (every pairing by "Play", goals by the sensor): the tournament page p95 < 150 ms after every pairing, and a pairing's last goal → the tournament has its result p95 < 150 ms
 - SSE: 50 connected clients without slowing down the table
 
 **Task 11 decisions** (2026-11-24, approved by the owner):
@@ -125,6 +126,10 @@ Measured on x86 (100k games, 40 players, 329 000 rating rows; the machine's spee
 | full replay (100k games, nothing changed) | 2.7–7.3 s | | – |
 | goal → saved, effects out (50 SSE clients) | 1.3 ms | 2.4 ms | 10 ms ✓ |
 | goal → SSE message at 50 clients | 5.5 ms | 10 ms | 50 ms ✓ |
+| 64-team double knockout (126 pairings): tournament page / last goal → result | 6.4 / 8.7 ms | 13 / 16 ms | 150 ms ✓ |
+| 40-player Monster DYP (50 pairings): tournament page / last goal → result | 5.4 / 11 ms | 12 / 22 ms | 150 ms ✓ |
+
+The first tournament run (M6 task 7) found the page at 290 ms p95: the pairing results query scanned all 100k games, because SQLite doesn't use the partial index `games_pairing` unless the query says `pairing_id IS NOT NULL`. Fixed (1 ms instead of 90 ms).
 
 On the Pi (roughly 3× slower) the background refresh will take about 20 s with 100k games: the old numbers show until then. Measure before M3 closes.
 
@@ -222,7 +227,7 @@ The milestone numbers are names, not positions: they stay the same so references
 4. ✓ API + permissions (`tournaments.*`, own = the creator), SSE topic `tournament` (routes in spec 09 §13).
 5. ✓ Web: setup page with the format list, tournament page (bracket, groups, standings, ready pairings), scoreboard tournament mode, profile additions.
 6. ✓ Changing a running tournament (spec 09 §10–11): replacing players, dropouts in every format (walkovers, annulled or forfeits, not drawn any more; a property test drops and replaces at random in every format), rename and rules of later stages, conflicts after edits and the rebuild, finished tournaments frozen and reopened by a void. No manual results: the table stands on its own.
-7. Load: a 64-team double knockout and a 40-player Monster DYP through `--sim`; e2e test of a small tournament.
+7. ✓ Load: a 64-team double knockout and a 40-player Monster DYP played to the end in `kicker loadtest` (`--tournament-teams`, `--monster-players`; budgets in §4); e2e test of a small knockout from the setup page to the podium (`05-tournament.spec.ts`).
 
 ### M7: Operations
 - Full onboarding wizard, encrypted backups + emergency kit, automatic backup before migrations, signed updates with rollback, firmware updates over USB, SD card image.

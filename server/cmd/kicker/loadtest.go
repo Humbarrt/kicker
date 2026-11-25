@@ -24,6 +24,8 @@ func loadtestCmd(args []string) error {
 	players := fs.Int("players", 40, "players")
 	requests := fs.Int("requests", 200, "requests per measured endpoint")
 	clients := fs.Int("clients", 50, "SSE clients")
+	teams := fs.Int("tournament-teams", 64, "teams of the double knockout played to the end")
+	monster := fs.Int("monster-players", 40, "players of the Monster DYP played to the end")
 	scale := fs.Float64("budget-scale", 1, "multiply the time budgets (1 = Raspberry Pi 4; CI on x86 uses less)")
 	verbose := fs.Bool("v", false, "show the server's log")
 	_ = fs.Parse(args)
@@ -34,7 +36,7 @@ func loadtestCmd(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	opts := loadtest.Options{DataDir: *dataDir, Fresh: *fresh, Games: *games, Players: *players,
-		Requests: *requests, Clients: *clients, Scale: *scale}
+		Requests: *requests, Clients: *clients, Scale: *scale, TournamentTeams: *teams, MonsterPlayers: *monster}
 	if *verbose {
 		opts.Log = os.Stderr
 	}

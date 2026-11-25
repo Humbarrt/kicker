@@ -275,8 +275,8 @@ func (s *Store) SetTournamentState(ctx context.Context, id int64, from, to strin
 func (s *Store) DeleteTournament(ctx context.Context, id int64) error {
 	return s.Write(ctx, func(tx *sql.Tx) error {
 		var n int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM games g JOIN tournament_pairings p ON p.id = g.pairing_id
-			WHERE p.tournament_id = ?`, id).Scan(&n); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tournament_pairings p JOIN games g INDEXED BY games_pairing ON g.pairing_id = p.id
+			WHERE p.tournament_id = ? AND g.pairing_id IS NOT NULL`, id).Scan(&n); err != nil {
 			return err
 		}
 		if n > 0 {
@@ -361,10 +361,11 @@ func (s *Store) TournamentResults(ctx context.Context, tournamentID int64) (map[
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	// The partial index games_pairing (pairing_id IS NOT NULL): without it SQLite scans every game.
 	rows, err = s.r.QueryContext(ctx, `SELECT g.pairing_id, g.id, COALESCE(g.pairing_a_side, 'home'), g.winner,
 			g.home_goals, g.away_goals, g.ended_at
-		FROM games g JOIN tournament_pairings p ON p.id = g.pairing_id
-		WHERE p.tournament_id = ? AND g.state = 'finished' AND NOT g.voided
+		FROM tournament_pairings p JOIN games g INDEXED BY games_pairing ON g.pairing_id = p.id
+		WHERE p.tournament_id = ? AND g.pairing_id IS NOT NULL AND g.state = 'finished' AND NOT g.voided
 		ORDER BY g.ended_at, g.id`, tournamentID)
 	if err != nil {
 		return nil, err
@@ -466,8 +467,8 @@ func (s *Store) StartTournament(ctx context.Context, id int64, settings json.Raw
 // sleep, or switched off the table), if there is one.
 func (s *Store) TournamentPausedGame(ctx context.Context, tournamentID int64) (int64, bool, error) {
 	var id int64
-	err := s.r.QueryRowContext(ctx, `SELECT g.id FROM games g JOIN tournament_pairings p ON p.id = g.pairing_id
-		WHERE p.tournament_id = ? AND g.state = 'paused' ORDER BY g.id DESC LIMIT 1`, tournamentID).Scan(&id)
+	err := s.r.QueryRowContext(ctx, `SELECT g.id FROM tournament_pairings p JOIN games g INDEXED BY games_pairing ON g.pairing_id = p.id
+		WHERE p.tournament_id = ? AND g.pairing_id IS NOT NULL AND g.state = 'paused' ORDER BY g.id DESC LIMIT 1`, tournamentID).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
 	}
