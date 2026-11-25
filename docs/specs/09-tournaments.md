@@ -1,7 +1,7 @@
 # Spec 09: Tournaments
 
-Status: **Draft** (2026-11-25, M6). Builds on D11 and D16 (`00-architecture-decisions.md`), the game engine (spec 02), ratings (D9) and the permissions of spec 03 §4.
-Proposals marked *(proposal)* fill gaps D11 leaves open; the owner's decisions are collected in §15.
+Status: **Approved v1** (2026-11-25, M6; owner's decisions in §15). Builds on D11 and D16 (`00-architecture-decisions.md`), the game engine (spec 02), ratings (D9) and the permissions of spec 03 §4.
+Where D11 left gaps, §15 records how they were decided.
 
 ## 1. Scope
 - Creating a tournament: participants, team building, format, rules – chosen by **estimated duration** (D11).
@@ -29,7 +29,7 @@ Proposals marked *(proposal)* fill gaps D11 leaves open; the owner's decisions a
 - **abandoned:** stopped for good by `tournaments.manage`. Played games stay valid and rated; the standings at that moment are kept, no placements. Can be reinstated to `paused`.
 
 ## 4. Setup
-1. **Name** (default "Tournament <date>"), **participants**: pick players, add new ones or the guest. Players can also be added by inserting their coin or tapping a corner tag while the setup page is open *(proposal)*.
+1. **Name** (default "Tournament <date>"), **participants**: pick players, add new ones or the guest. Players can also be added by inserting their coin or tapping a corner tag while the setup page is open.
 2. **Team building** (D11):
    - **Fixed teams:** made by hand (drag players together), or 1-player teams (1 against 1).
    - **DYP:** teams drawn at random once, at the start. Can be redrawn while in setup.
@@ -42,8 +42,12 @@ Proposals marked *(proposal)* fill gaps D11 leaves open; the owner's decisions a
 
 ### Duration estimate (D11)
 `games × (game length + changeover) ÷ tables`
-- **game length:** the stage's time limit if it has one, otherwise the average length of this kicker's finished games with the same preset (≥ 10 games), otherwise 6 min *(proposal)*. Best-of-n counts the expected number of games (best of 3 ≈ 2.5).
-- **changeover:** 1 min *(proposal; setting)*.
+- **game length** follows the stage's win conditions (D10: `win_score`, `win_by`, `max_score`, `time_limit_s`):
+  - **expected goals** of a game: the winner's target score plus the loser's expected goals (≈ 0.6 × target, from this kicker's history once it has ≥ 10 games), at most `2 × max_score − 1`; `win_by` > 1 adds the expected extra goals near the end.
+  - **time per goal:** this kicker's average play time per goal (≥ 10 games), otherwise 22 s – so the default first-to-10 game comes out at ≈ 6 min.
+  - With a **time limit**, the game lasts the shorter of the two, plus ≈ 30 s for a golden goal when tied.
+  - Best-of-n counts the expected number of games (best of 3 ≈ 2.5, best of 5 ≈ 4).
+- **changeover:** 1 min (setting).
 - **games:** exact for knockout, round robin, groups, Swiss; for double knockout the maximum (with bracket reset) is shown as "up to".
 
 ## 5. Seeding
@@ -53,7 +57,7 @@ Proposals marked *(proposal)* fill gaps D11 leaves open; the owner's decisions a
 
 ## 6. Formats
 ### 6.1 Round robin
-Every team plays every other team once (twice: setting *(proposal)*). Rounds by the circle method, so no team plays twice in a row where avoidable. Ranking §9.
+Every team plays every other team once (twice: setting). Rounds by the circle method, so no team plays twice in a row where avoidable. Ranking §9.
 
 ### 6.2 Single knockout
 - Bracket of the next power of 2; **byes go to the top seeds** (D11). Standard bracket order, so 1 and 2 can only meet in the final.
@@ -67,7 +71,9 @@ Every team plays every other team once (twice: setting *(proposal)*). Rounds by 
 ### 6.4 Groups → knockout
 - Groups of 3–6 teams, as equal as possible (D11: unequal sizes allowed). The setup offers the group counts that fit.
 - Each group is a round robin; group rankings use **points per game played** (D11), then the tie-breaks.
-- Top 1 or 2 of each group advance *(proposal: setting, default 2)*; the knockout crosses groups (A1 vs B2, B1 vs A2, …) so teams from one group meet again as late as possible.
+- **Configurable** (owner, 2026-11-25):
+  - how many advance per group: 1–4 (default 2), plus optionally the best third-placed teams to fill the bracket;
+  - how the knockout is seeded: **crossed** (default: A1 vs B2, B1 vs A2, …, so teams from one group meet again as late as possible) or **re-seeded** by the group results (all group winners first, by points per game, then the runners-up, …; standard bracket order).
 
 ### 6.5 Swiss
 - Rounds: ⌈log₂ teams⌉ by default, adjustable.
@@ -77,7 +83,7 @@ Every team plays every other team once (twice: setting *(proposal)*). Rounds by 
 ### 6.6 Monster DYP
 - Rounds like Swiss, but on **players**: each round all players are paired into new random teams (avoid repeating partners, then avoid repeating opponents), then teams are matched.
 - **Individual ranking:** points of the games each player won, then the tie-breaks per player.
-- Odd players: one sits out per round in rotation (D11); sitting out counts as neither win nor loss *(proposal)*.
+- Odd players: one sits out per round in rotation (D11); sitting out counts as neither win nor loss.
 - Number of rounds: chosen in setup (default so that everyone plays ≈ 5 games).
 
 ## 7. Pairings and games
@@ -87,29 +93,34 @@ Every team plays every other team once (twice: setting *(proposal)*). Rounds by 
 - The tournament shows a pairing as one row (e.g. "2 : 1") with its games below (D11).
 
 ### 7.2 Order of play
-- The next pairing is the **first `ready` pairing** in a fixed order: by round, then by bracket position / group *(proposal)*. Teams that just played get a pause where the order allows it (a team doesn't play twice in a row if another ready pairing exists).
-- The tournament page shows "now", "next" and "after that", so players can get ready.
-- `tournaments.run` can pick a different ready pairing by hand.
+- **Any ready pairing can be played**, in or out of order: a pairing is `ready` as soon as both teams are known and neither team is playing. Pairings never wait for unrelated ones – if someone is at the loo, another ready pairing is played meanwhile (owner, 2026-11-25). Round-based formats (Swiss, Monster DYP) draw the next round only when the current one is complete, so there the choice is within the round.
+- The tournament **suggests** the next pairing: the first ready one by round, then bracket position / group, skipping teams that just played where another ready pairing exists.
+- The tournament page and the scoreboard show the suggestion ("next") and the other ready pairings, so players can get ready.
 
 ### 7.3 First ball and sides
-- D11: the tournament decides the first ball. *(proposal)* Game 1: the higher seed chooses → by default team A (higher seed) is home and gets the first ball. Later games of a pairing: the loser of the previous game gets the first ball; sides swap every game.
+- D11: the tournament decides the first ball. Game 1: the higher seed chooses → by default team A (higher seed) is home and gets the first ball. Later games of a pairing: the loser of the previous game gets the first ball; sides swap every game.
 
 ### 7.4 Results
 - A tournament game ends like any game (spec 02 §8); the tournament reads the winner and updates the pairing. Draws can't happen (golden goal).
 - **Edited games** (spec 02 §11): an edit of a tournament game updates its pairing. If that changes who won a pairing whose follow-up pairings were already played, the tournament **doesn't rewrite history**: it shows a warning to `tournaments.manage`, who can rebuild the bracket from that point (§11).
-- **Results without the table** *(proposal)*: `tournaments.run` can enter a game result by hand (e.g. the table broke). It becomes a finished game marked `manual`, rated like the others.
+- **Results without the table:** `tournaments.run` can enter a game result by hand (e.g. the table broke). It becomes a finished game marked `manual`, rated like the others.
 
 ## 8. The table during a tournament
 - While a tournament is **running**, the table is in **tournament mode**:
   - The scoreboard shows the tournament name, stage/round and the two team names above the score; the overview shows the bracket or standings instead of the free-play sections.
-  - The current pairing's players are **registered by the tournament**, not by coins or tags. Coins and tags still wake the table; they don't register anyone. *(proposal: a coin of a player of the current pairing counts as "I'm here" for the smart wake.)*
-  - Kickoff: as configured (`kickoff_requires`, spec 02 §6); "Start now" for `table.control`.
   - Free play is not possible; to play a free game, pause the tournament first.
-- When a pairing is done, the next ready pairing is put on the table with the kickoff countdown – no button needed *(proposal)*.
+- **Starting a pairing** – the table knows who plays, so it never waits for registrations (owner, 2026-11-25):
+  - **Check-in:** a coin or a corner tag of a tournament player means "I'm here". It doesn't register the player the normal way (spec 02 §4); the tournament puts the pairing's teams on the sides.
+  - As soon as **one player of each team** of a ready pairing has checked in, that pairing goes on the table and the kickoff countdown runs (spec 02 §6). Usually that is the suggested pairing, but any ready pairing can start this way – out of order (§7.2).
+  - If a team has several ready pairings (round robin), the pairing starts once the other team checks in too.
+  - **"Play"** next to any ready pairing in the UI (`table.control`) puts it on the table at once, without check-ins.
+  - Check-ins are kept until they are used, until the player's coin is ejected, or until the table sleeps.
+  - The tournament decides sides and first ball (§7.3); the stage's rules apply.
+- A finished game of a best-of pairing is followed by the next game of the same pairing with the countdown – the players are already there.
 - The table going to sleep pauses the tournament (§3). On wake: "Continue tournament X?" – continue / not now.
 
 ## 9. Rankings and tie-breaks
-- **Points:** 1 per pairing won *(proposal; D11 has no draws)*. Groups: points per pairing played (D11).
+- **Points:** 1 per pairing won (no draws, D11). Groups: points per pairing played (D11).
 - **Tie-breaks**, in this order (configurable: order and which ones):
   1. head-to-head (pairings between the tied teams)
   2. game difference (games won − lost, for best-of)
@@ -142,7 +153,7 @@ Every team plays every other team once (twice: setting *(proposal)*). Rounds by 
 ## 13. Data model and code
 - Package `tournament/`: **pure functions**, like `engine/` – `Plan(setup) → stages and pairings`, `Advance(state, result) → new pairings`, `Standings(state)`, the duration estimate. No I/O; tested with scenario files like the engine (`tournament/testdata/*.txt`).
 - The **state is derived** from the setup and the pairing results, so an edit or a rebuild just recomputes it.
-- Tables *(proposal)*:
+- Tables:
   - `tournaments` (id, name, owner_account_id, state, settings JSON, created_at, started_at, ended_at)
   - `tournament_participants` (tournament_id, player_id, team_no NULL, seed, dropped_at)
   - `tournament_stages` (tournament_id, no, format, settings JSON incl. rules + games per pairing)
@@ -161,12 +172,15 @@ Every team plays every other team once (twice: setting *(proposal)*). Rounds by 
 6. Dropouts, replacements, manual results, rebuild.
 7. Load: a 64-team double knockout and a 40-player Monster DYP through `--sim`; e2e test of a small tournament.
 
-## 15. Open questions for the owner
-1. **Points and ranking:** 1 point per pairing won, tie-breaks as in §9 – or a different scheme (e.g. 3/0, or games instead of pairings)?
-2. **Groups → knockout:** how many advance per group (default 2)? Cross-seeding as proposed?
-3. **First ball:** higher seed in game 1, then the loser of the previous game (§7.3)?
-4. **Tournament mode:** the tournament owns the table while running, free play only after pausing it (§8)? And the next pairing starts by itself with the countdown?
-5. **Manual results** for games not played on the table (§7.4): wanted? Rated?
-6. **Monster DYP:** sitting out = no points (§6.6)? Default number of rounds?
-7. **Defaults for the estimate:** 6 min per game without data, 1 min changeover?
-8. **Joining in setup with coins/tags** (§4.1): wanted now, or only by picking players?
+## 15. Decided in review (2026-11-25)
+1. **Points:** 1 per pairing won; tie-breaks head-to-head, game difference, goal difference, goals scored, Buchholz, seed (§9).
+2. **Groups → knockout:** configurable – how many advance per group and crossed or re-seeded knockout (§6.4).
+3. **First ball:** higher seed in game 1, then the loser of the previous game; sides swap every game (§7.3).
+4. **Tournament mode:** the tournament owns the table while it runs; free play only after pausing it (§8).
+5. **Manual results** for games not played on the table: allowed, rated like the others (§7.4).
+6. **Monster DYP:** sitting out gives no points; default rounds so everyone plays ≈ 5 games (§6.6).
+7. **Duration estimate:** 22 s per goal and 1 min changeover without data, and the game length follows the stage's target score, lead and time limit (§4).
+8. **Starting pairings:** the table doesn't wait for registrations – a check-in by coin/tag of one player per team, or "Play" in the UI, starts a pairing; any ready pairing can be played out of order (§7.2, §8).
+
+## 16. Open questions
+- None.
