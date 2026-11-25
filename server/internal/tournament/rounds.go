@@ -106,11 +106,19 @@ func (b *builder) swiss(entrants []*Entrant) {
 	for r := 1; r <= rounds; r++ {
 		var order []*Entrant
 		if r == 1 {
-			order = entrants
+			order = b.active(entrants, r)
 		} else {
-			for _, row := range rank(entrants, done, false, false, []TieBreak{Buchholz, GoalDiff, GoalsFor, SeedOrder}) {
-				order = append(order, row.Entrant)
+			in := b.active(entrants, r)
+			for _, row := range rank(entrants, done, false, false, []TieBreak{Buchholz, GoalDiff, GoalsFor, SeedOrder}, -1) {
+				for _, e := range in {
+					if e == row.Entrant {
+						order = append(order, e)
+					}
+				}
 			}
+		}
+		if len(order) < 2 {
+			break // not enough teams left to draw another round
 		}
 		var byeTeam *Entrant
 		if len(order)%2 == 1 {
@@ -229,11 +237,31 @@ func (b *builder) monster(players []*Entrant) {
 	partners := map[[2]int64]int{}
 	opponents := map[[2]int64]int{}
 	satOut := map[int64]int{}
+	slot := map[int64]int{} // player → place in Setup.Players
+	for _, e := range players {
+		if _, ok := slot[e.Players[0]]; !ok {
+			slot[e.Players[0]] = e.Slots[0]
+		}
+	}
 	var done []*Pairing
 	for r := 1; r <= rounds; r++ {
 		// Who sits out: fewest rounds out so far, then the lowest-ranked.
-		ranking := rank(players, done, true, false, b.setup.TieBreaks)
-		sit := len(players) % 4
+		// Players who dropped out are left out of the draw from now on.
+		act := b.active(players, r)
+		isActive := map[*Entrant]bool{}
+		for _, e := range act {
+			isActive[e] = true
+		}
+		if len(act) < 4 {
+			break // not enough players left for another round
+		}
+		var ranking []Row
+		for _, row := range rank(players, done, true, false, b.setup.TieBreaks, -1) {
+			if isActive[row.Entrant] {
+				ranking = append(ranking, row)
+			}
+		}
+		sit := len(act) % 4
 		var out []int64
 		if sit > 0 {
 			cands := make([]Row, len(ranking))
@@ -247,7 +275,7 @@ func (b *builder) monster(players []*Entrant) {
 			}
 		}
 		var in []int64
-		for _, e := range players {
+		for _, e := range act {
 			if !contains(out, e.Players[0]) {
 				in = append(in, e.Players[0])
 			}
@@ -255,8 +283,8 @@ func (b *builder) monster(players []*Entrant) {
 		best := monsterDraw(in, partners, opponents, rand.New(rand.NewPCG(uint64(b.setup.Seed), uint64(r))))
 		var round []*Pairing
 		for i := 0; i+3 < len(best); i += 4 {
-			x := &Entrant{Players: []int64{best[i], best[i+1]}}
-			y := &Entrant{Players: []int64{best[i+2], best[i+3]}}
+			x := &Entrant{Players: []int64{best[i], best[i+1]}, Slots: []int{slot[best[i]], slot[best[i+1]]}}
+			y := &Entrant{Players: []int64{best[i+2], best[i+3]}, Slots: []int{slot[best[i+2]], slot[best[i+3]]}}
 			partners[pair64(best[i], best[i+1])]++
 			partners[pair64(best[i+2], best[i+3])]++
 			for _, p := range x.Players {

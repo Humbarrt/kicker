@@ -108,6 +108,12 @@ export const api = {
 		post<TournamentDetail>(`/api/tournaments/${id}/${action}`),
 	playPairing: (id: number, pairing: string) => post<TournamentDetail>(`/api/tournaments/${id}/play`, { pairing }),
 	deleteTournament: (id: number) => del<void>(`/api/tournaments/${id}`),
+	changeTournament: (id: number, c: { name: string; rules?: TournamentRules; preset_id?: number }) =>
+		patch<TournamentDetail>(`/api/tournaments/${id}`, c),
+	replacePlayer: (id: number, participant: number, player: number) =>
+		post<TournamentDetail>(`/api/tournaments/${id}/replace`, { participant, player }),
+	dropOut: (id: number, entrant: number) => post<TournamentDetail>(`/api/tournaments/${id}/dropout`, { entrant }),
+	rebuildTournament: (id: number) => post<TournamentDetail>(`/api/tournaments/${id}/rebuild`),
 	playerTournaments: (id: number) => get<PlayerTournamentResult[]>(`/api/players/${id}/tournaments`),
 
 	info: () => get<Info>('/api/info'),

@@ -88,6 +88,7 @@ func nextPow2(n int) int {
 // knockout builds a single or double knockout over the entrants in seed order. Seeds beyond
 // the number of entrants are byes, so the top seeds get them (D11).
 func (b *builder) knockout(entrants []*Entrant, double bool) {
+	b.ss.Entrants = entrants
 	size := max(2, nextPow2(len(entrants)))
 	var round []*Pairing
 	order := seedOrder(size)

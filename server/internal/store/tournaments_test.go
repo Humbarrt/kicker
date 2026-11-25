@@ -56,11 +56,11 @@ func TestTournaments(t *testing.T) {
 	}
 
 	// A pairing with a game: team A played away; a voided game and a running one don't count.
-	pid, err := s.PairingID(ctx, id, "s1-W-1-1")
+	pid, err := s.PairingID(ctx, id, "s1-W-1-1", "t1-t2")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if again, _ := s.PairingID(ctx, id, "s1-W-1-1"); again != pid {
+	if again, _ := s.PairingID(ctx, id, "s1-W-1-1", "t1-t2"); again != pid {
 		t.Errorf("a second row: %d, %d", pid, again)
 	}
 	end := time.Now()

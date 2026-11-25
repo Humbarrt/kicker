@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -49,19 +50,26 @@ type TournamentDetail struct {
 	Events       []TournamentEventView `json:"events"`
 	Can          TournamentCan         `json:"can"`
 	Preview      bool                  `json:"preview"` // setup: the bracket as it would start (fixed teams)
+	// Conflicts are pairings played by other sides than the bracket has now, after an edit: a
+	// rebuild plays them again (spec 09 §11).
+	Conflicts []string `json:"conflicts"`
 }
 
 type ParticipantView struct {
-	PlayerID int64 `json:"player_id"`
-	Team     *int  `json:"team"`
-	Seed     int   `json:"seed"`
-	Dropped  bool  `json:"dropped"`
+	ID         int64  `json:"id"`
+	PlayerID   int64  `json:"player_id"`
+	Team       *int   `json:"team"`
+	Seed       int    `json:"seed"`
+	Dropped    bool   `json:"dropped"`
+	ReplacedBy *int64 `json:"replaced_by"` // the participant who took this player's place
 }
 
 type EntrantView struct {
 	Team    int     `json:"team"` // 0 for Monster DYP pairs
 	Players []int64 `json:"players"`
 	Bye     bool    `json:"bye,omitempty"`
+	Slots   []int   `json:"slots,omitempty"`   // Monster DYP: the players' places (from 1)
+	Dropped bool    `json:"dropped,omitempty"` // dropped out (spec 09 §10)
 }
 
 type PairingView struct {
@@ -122,6 +130,7 @@ type StandingView struct {
 	GoalsFor     int     `json:"goals_for"`
 	GoalsAgainst int     `json:"goals_against"`
 	Buchholz     int     `json:"buchholz"`
+	Dropped      bool    `json:"dropped,omitempty"`
 }
 
 type PlacementView struct {
@@ -150,7 +159,8 @@ type TournamentCan struct {
 	Edit   bool `json:"edit"`   // change the setup (tournaments.edit)
 	Run    bool `json:"run"`    // start, pause, continue (tournaments.run)
 	Play   bool `json:"play"`   // put a ready pairing on the table (table.control)
-	Manage bool `json:"manage"` // abandon, reinstate, delete (tournaments.manage)
+	Manage bool `json:"manage"` // abandon, reinstate, delete, rebuild (tournaments.manage)
+	Change bool `json:"change"` // running or paused: rename, rules of later stages, replace, drop out (tournaments.edit)
 }
 
 // OptionView is one format choice of the setup page.
@@ -188,7 +198,8 @@ func entrantView(e *tournament.Entrant) *EntrantView {
 	if e == nil {
 		return nil
 	}
-	return &EntrantView{Team: e.Team, Players: append([]int64{}, e.Players...), Bye: e.Bye}
+	return &EntrantView{Team: e.Team, Players: append([]int64{}, e.Players...), Bye: e.Bye, Slots: e.Slots,
+		Dropped: e.Dropped(math.MaxInt)}
 }
 
 func standingViews(rows []tournament.Row) []StandingView {
@@ -196,7 +207,8 @@ func standingViews(rows []tournament.Row) []StandingView {
 	for _, r := range rows {
 		out = append(out, StandingView{ID: r.ID, Players: append([]int64{}, r.Entrant.Players...), Seed: r.Seed,
 			Played: r.Played, Won: r.Won, Lost: r.Lost, Points: r.Points, PerGame: r.PerGame(),
-			GamesWon: r.GamesWon, GamesLost: r.GamesLost, GoalsFor: r.GoalsFor, GoalsAgainst: r.GoalsAgainst, Buchholz: r.Buchholz})
+			GamesWon: r.GamesWon, GamesLost: r.GamesLost, GoalsFor: r.GoalsFor, GoalsAgainst: r.GoalsAgainst, Buchholz: r.Buchholz,
+			Dropped: r.Dropped})
 	}
 	return out
 }
@@ -359,7 +371,80 @@ func (o Options) tournamentRoutes(api *gin.RouterGroup) {
 		o.respondTournament(c, id)
 	})
 
+	// Changing a running or paused tournament (spec 09 §10–11): tournaments.edit, own or all.
+	api.PATCH("/tournaments/:id", func(c *gin.Context) {
+		id, _, ok := o.tournamentFor(c, auth.TournamentsEdit)
+		if !ok {
+			return
+		}
+		var in struct {
+			Name     string                 `json:"name" binding:"required"`
+			Rules    *tournaments.GameRules `json:"rules"` // the stages that haven't started; null = unchanged
+			PresetID *int64                 `json:"preset_id"`
+		}
+		if err := c.ShouldBindJSON(&in); err != nil {
+			fail(c, http.StatusBadRequest, "invalid_input", err.Error())
+			return
+		}
+		if err := svc.Change(c.Request.Context(), id, in.Name, in.Rules, in.PresetID, authorPtr(c)); err != nil {
+			tournamentError(c, err)
+			return
+		}
+		o.respondTournament(c, id)
+	})
+	api.POST("/tournaments/:id/replace", func(c *gin.Context) {
+		id, _, ok := o.tournamentFor(c, auth.TournamentsEdit)
+		if !ok {
+			return
+		}
+		var in struct {
+			Participant int64 `json:"participant" binding:"required"`
+			Player      int64 `json:"player" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&in); err != nil {
+			fail(c, http.StatusBadRequest, "invalid_input", err.Error())
+			return
+		}
+		if err := svc.Replace(c.Request.Context(), id, in.Participant, in.Player, authorPtr(c)); err != nil {
+			tournamentError(c, err)
+			return
+		}
+		o.audit(c, "tournament_player_replaced", strconv.FormatInt(id, 10), "")
+		o.respondTournament(c, id)
+	})
+	api.POST("/tournaments/:id/dropout", func(c *gin.Context) {
+		id, _, ok := o.tournamentFor(c, auth.TournamentsEdit)
+		if !ok {
+			return
+		}
+		var in struct {
+			Entrant int `json:"entrant" binding:"required"` // team number, or Monster DYP place
+		}
+		if err := c.ShouldBindJSON(&in); err != nil {
+			fail(c, http.StatusBadRequest, "invalid_input", err.Error())
+			return
+		}
+		if err := svc.DropOut(c.Request.Context(), id, in.Entrant, authorPtr(c)); err != nil {
+			tournamentError(c, err)
+			return
+		}
+		o.audit(c, "tournament_dropout", strconv.FormatInt(id, 10), "")
+		o.respondTournament(c, id)
+	})
+
 	manage := api.Group("", o.Require(auth.TournamentsManage))
+	manage.POST("/tournaments/:id/rebuild", func(c *gin.Context) {
+		id, ok := idParam(c, "id")
+		if !ok {
+			return
+		}
+		if err := svc.Rebuild(c.Request.Context(), id, authorPtr(c)); err != nil {
+			tournamentError(c, err)
+			return
+		}
+		o.audit(c, "tournament_rebuilt", strconv.FormatInt(id, 10), "")
+		o.respondTournament(c, id)
+	})
 	manage.POST("/tournaments/:id/abandon", func(c *gin.Context) {
 		id, ok := idParam(c, "id")
 		if !ok {
@@ -449,14 +534,17 @@ func (o Options) tournamentDetail(c *gin.Context, id int64) (TournamentDetail, e
 		Stages: []StageView{}, Placements: []PlacementView{}, Ready: []string{}, CheckedIn: []int64{}, Events: []TournamentEventView{}}
 	_ = json.Unmarshal(t.Settings, &d.Settings)
 	for _, p := range ps {
-		d.Participants = append(d.Participants, ParticipantView{PlayerID: p.PlayerID, Team: p.TeamNo, Seed: p.Seed, Dropped: p.DroppedAt != nil})
+		d.Participants = append(d.Participants, ParticipantView{ID: p.ID, PlayerID: p.PlayerID, Team: p.TeamNo, Seed: p.Seed,
+			Dropped: p.DroppedAt != nil, ReplacedBy: p.ReplacedBy})
 	}
 	for _, e := range evs {
 		d.Events = append(d.Events, TournamentEventView{At: e.At.UnixMilli(), AccountID: e.AccountID, Kind: e.Kind, Details: e.Details})
 	}
 	d.Can = TournamentCan{Edit: t.State == "setup" && o.mayTournament(c, auth.TournamentsEdit, t),
 		Run: o.mayTournament(c, auth.TournamentsRun, t), Play: o.perms(c).Has(auth.TableControl),
-		Manage: o.perms(c).Has(auth.TournamentsManage)}
+		Manage: o.perms(c).Has(auth.TournamentsManage),
+		Change: (t.State == "running" || t.State == "paused") && o.mayTournament(c, auth.TournamentsEdit, t)}
+	d.Conflicts = []string{}
 
 	if t.State == "setup" && d.Settings.TeamMode != tournaments.FixedTeams {
 		// Drawn teams are known at the start: estimate with stand-ins.
@@ -536,6 +624,13 @@ func (o Options) tournamentDetail(c *gin.Context, id int64) (TournamentDetail, e
 		d.Placements = append(d.Placements, PlacementView{Place: p.Place, Team: p.Team, Players: append([]int64{}, p.Players...)})
 	}
 	d.Finished = st.Finished
+	if t.State == "running" || t.State == "paused" {
+		c, err := svc.Conflicts(ctx, id, st)
+		if err != nil {
+			return d, err
+		}
+		d.Conflicts = append(d.Conflicts, c...)
+	}
 	if t.State == "running" {
 		for _, p := range st.ReadyPairings() {
 			d.Ready = append(d.Ready, p.Key)
@@ -574,6 +669,12 @@ func tournamentError(c *gin.Context, err error) {
 		fail(c, http.StatusConflict, "not_running", err.Error())
 	case errors.Is(err, tournaments.ErrNotReady):
 		fail(c, http.StatusConflict, "not_ready", err.Error())
+	case errors.Is(err, tournaments.ErrOnTable):
+		fail(c, http.StatusConflict, "on_table", err.Error())
+	case errors.Is(err, tournaments.ErrNoConflicts):
+		fail(c, http.StatusConflict, "no_conflicts", err.Error())
+	case errors.Is(err, tournaments.ErrInTournament):
+		fail(c, http.StatusConflict, "in_tournament", err.Error())
 	case errors.Is(err, store.ErrTournamentState):
 		fail(c, http.StatusConflict, "wrong_state", err.Error())
 	case errors.Is(err, store.ErrInUse):

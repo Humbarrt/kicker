@@ -21,11 +21,11 @@ Where D11 left gaps, §15 records how they were decided.
 | **Game** | a normal game (spec 02) with a `pairing_id`: rated and counted in stats like any other |
 
 ## 3. Lifecycle
-`setup → running ⇄ paused → finished | abandoned` (D11)
+`setup → running ⇄ paused → finished | abandoned` (D11); `finished → paused` when one of its games is voided (§11).
 - **setup:** everything can be changed; nothing is on the table yet.
 - **running:** the tournament owns the table (§8). Pairings are played in order.
 - **paused:** by hand, or when the table goes to sleep during a tournament game (the game is paused with it, D16). Paused tournaments are listed and can be picked up later; on wake the table offers to continue it.
-- **finished:** all placements are known. Read-only, except reverting an edit (§11).
+- **finished:** all placements are known. Its pairing results are **frozen** at the finish: later edits of its games change their stats and ratings, not the tournament (§11). Voiding one of its games reopens it (→ paused).
 - **abandoned:** stopped for good by `tournaments.manage`. Played games stay valid and rated; the standings at that moment are kept, no placements. Can be reinstated to `paused`.
 
 ## 4. Setup
@@ -102,8 +102,8 @@ Every team plays every other team once (twice: setting). Rounds by the circle me
 
 ### 7.4 Results
 - A tournament game ends like any game (spec 02 §8); the tournament reads the winner and updates the pairing. Draws can't happen (golden goal).
-- **Edited games** (spec 02 §11): an edit of a tournament game updates its pairing. If that changes who won a pairing whose follow-up pairings were already played, the tournament **doesn't rewrite history**: it shows a warning to `tournaments.manage`, who can rebuild the bracket from that point (§11).
-- **Results without the table:** `tournaments.run` can enter a game result by hand (e.g. the table broke). It becomes a finished game marked `manual`, rated like the others.
+- **Edited games** (spec 02 §11): while the tournament runs or is paused, an edit of a tournament game updates its pairing. If that changes who won a pairing whose follow-up pairings were already played, the tournament **doesn't rewrite history**: those pairings are **conflicts**, shown with a warning, and `tournaments.manage` can rebuild them (§11). A finished tournament is frozen (§3, §11).
+- **No results without the table** (owner, 2026-11-25): every pairing is played on the table, started by check-in or "Play"; goals added by hand during that game work as in any game. The table stands on its own.
 
 ## 8. The table during a tournament
 - While a tournament is **running**, the table is in **tournament mode**:
@@ -131,16 +131,21 @@ Every team plays every other team once (twice: setting). Rounds by the circle me
 - **Placements:** knockout: final winner 1st, loser 2nd, 3rd by 3rd place game or shared; double knockout §6.3; round robin and Swiss: the ranking; groups → knockout: by the knockout.
 
 ## 10. Dropouts and replacements (D11)
-- **Replacing a player** (`tournaments.edit`): applies from the next game on; played games keep their players.
-- **A team drops out:**
-  - Knockout: the opponent advances by **walkover**, now and for the pairings it would have reached.
-  - Groups and round robin: if fewer than 50 % of the team's pairings were played, they are **annulled** (removed from the standings); otherwise the remaining ones are **forfeits** (won by the opponent).
-  - Swiss / Monster DYP: the team (player) is not paired any more; played pairings stay.
+- **Replacing a player** (`tournaments.edit`, running or paused): the new player takes the old one's place – team and seed – from the next game on; played games keep their players. The old participant row stays, marked as replaced (`replaced_by`): the player keeps the tournament on their profile, marked "replaced", without a medal. In Monster DYP the substitute takes over the slot with its points; the standings show "Lena (for Tom)" (owner, 2026-11-25). A player can't take part twice (except the guest).
+- **A team drops out** (`tournaments.edit`; in Monster DYP: a player). Not while its pairing is on the table – that game is finished or abandoned first. No undo; it is in the history.
+  - Knockout and double knockout: every open pairing of the team goes to the opponent by **walkover**, now and for the pairings it would have reached.
+  - Groups and round robin: if fewer than 50 % of the team's pairings were played, they are **annulled** (they don't count for anybody); otherwise the remaining ones are **forfeits** (walkovers for the opponents). Decided at the moment of the dropout and kept.
+  - Swiss / Monster DYP: the team (player) is not drawn into rounds after the current one; its open pairing in the current round is a walkover; played pairings stay.
+  - A team that dropped out is ranked last in that stage, **doesn't qualify** for the next stage (the next best moves up) and gets **no place**.
+  - If both sides of a pairing dropped out, the one that dropped out later goes on (and loses its next pairing): what was decided stays decided.
 - Walkovers, forfeits and byes never count for ratings or player stats (D11) – they are pairing results without games.
+- In the core, a dropout is stored in the setup (`Setup.Drops`: stage, rounds drawn so far, annulled, order) and the state is derived as always: nothing that was already played changes.
 
 ## 11. Changing a running tournament
-- `tournaments.edit` (own/all): rename, replace players, change the rules of stages not started yet.
-- `tournaments.manage`: abandon, reinstate, delete (only without played games; otherwise abandon), **rebuild from a pairing**: discards the later pairings that depend on it (their played games stay as normal free-play games, unlinked) and draws them again.
+- `tournaments.edit` (own/all), running or paused: rename, set the rules of the stages that haven't started yet (preset or custom, like the setup), replace players, let teams drop out (§10).
+- `tournaments.manage`: abandon, reinstate, delete (only without played games; otherwise abandon), **rebuild**.
+- **Conflicts and rebuilding** (running or paused): every pairing remembers who it was put on the table for (`tournament_pairings.sides`, e.g. `t1-t4`). After an edit, a pairing whose games were played by other sides than the bracket has now is a conflict – e.g. a semi-final's winner changed after the final was played. The tournament page lists them with a warning and marks them in the bracket. **Rebuild** takes the games of the conflicting pairings (and of those drawn after them that change too) out of the tournament – they stay as normal, rated games – and those pairings are played again with the right teams. Not while a pairing is on the table.
+- **Finished tournaments are frozen** (owner, 2026-11-25): at the finish the pairing results are stored with the tournament (`tournaments.frozen`). Its bracket, winner and medals come from them, so adding goals by hand afterwards can't win a tournament. **Voiding** a game of a finished tournament – any of its games, the final or an earlier one – reopens it: back to paused, the frozen results dropped, the pairing played again; later pairings that now disagree are conflicts as above. It freezes again when it finishes again.
 - Every change is a tournament event (§13) and visible in the tournament's history, like game edits.
 
 ## 12. Pages
@@ -158,7 +163,8 @@ Every team plays every other team once (twice: setting). Rounds by the circle me
   - `tournament_participants` (id, tournament_id, player_id, team_no NULL, seed, dropped_at) – the guest may take part several times
   - `tournament_pairings` (id, tournament_id, key, walkover NULL): a row only once a pairing is played or decided by walkover; the rest of the bracket is derived
   - `games.pairing_id` → that row, and `games.pairing_a_side` (home/away): where team A played, since sides swap every game
-  - `tournament_events` (id, tournament_id, at, account_id, kind, details JSON): created, edited, started, paused, resumed, finished, abandoned, reinstated, player_replaced, dropout, walkover, manual_result, rebuilt.
+  - `tournament_events` (id, tournament_id, at, account_id, kind, details JSON): created, edited, started, paused, resumed, finished, abandoned, reinstated, reopened, player_replaced, dropout, walkover, rebuilt (manual_result: unused, §7.4).
+  - Migration 0012: `tournament_participants.replaced_by`, `tournament_pairings.sides` (who it was put on the table for), `tournaments.frozen` (the results at the finish), the `reopened` event.
 - A pairing's result = its walkover, or its finished games that aren't voided, in the order they ended.
 - Package `tournaments` (the service, I/O) runs the active tournament: it starts it (DYP draw, seeding by rating unless the setup's order is kept), turns the engine's **tournament mode** on (`engine.SetTournament`), collects check-ins (the engine reports a tournament player's coin instead of registering it), stages pairings (`engine.StagePairing`: players, the stage's rules (copied from the chosen preset or custom; older setups without rules: the current preset), with golden goal, sides, first ball; then the normal kickoff countdown), stages the next game of a best-of by itself, finishes the tournament, and pauses it when the table sleeps during a tournament game. A running tournament is restored after a restart.
 - The engine's game carries its pairing (`Game.Pairing`: row id + where team A plays), saved with the game.
@@ -173,7 +179,9 @@ Every team plays every other team once (twice: setting). Rounds by the circle me
 | `POST /api/tournaments`, `PUT /api/tournaments/:id` (setup only) – name, settings, participants | `tournaments.create` / `tournaments.edit` (own/all) |
 | `POST …/:id/start`, `…/pause`, `…/continue` | `tournaments.run` (own/all) |
 | `POST …/:id/play {pairing}` | `table.control` |
-| `POST …/:id/abandon`, `…/reinstate`, `DELETE …/:id` (only without games) | `tournaments.manage` |
+| `PATCH /api/tournaments/:id` – running or paused: name, rules of the stages not started (`rules`, `preset_id`) | `tournaments.edit` (own/all) |
+| `POST …/:id/replace {participant, player}`, `POST …/:id/dropout {entrant}` (team number, Monster DYP place) | `tournaments.edit` (own/all) |
+| `POST …/:id/abandon`, `…/reinstate`, `…/rebuild`, `DELETE …/:id` (only without games) | `tournaments.manage` |
 
 "Own" = the account created the tournament. SSE topic `tournament` (`{id}`) on every change, for accounts with `view.tournaments`. During a tournament, free-play table actions answer `409 tournament`.
 
@@ -183,7 +191,7 @@ Every team plays every other team once (twice: setting). Rounds by the circle me
 3. Table integration: tournament mode, registering pairings, results back, pause/sleep/continue.
 4. API + permissions (`tournaments.*`), SSE.
 5. Web: setup page with the format list, tournament page (bracket, groups, standings, now/next), scoreboard tournament mode, profile additions.
-6. Dropouts, replacements, manual results, rebuild.
+6. Dropouts, replacements, rebuild, frozen finished tournaments (no manual results, §7.4).
 7. Load: a 64-team double knockout and a 40-player Monster DYP through `--sim`; e2e test of a small tournament.
 
 ## 15. Decided in review (2026-11-25)
@@ -191,10 +199,12 @@ Every team plays every other team once (twice: setting). Rounds by the circle me
 2. **Groups → knockout:** configurable – how many advance per group and crossed or re-seeded knockout (§6.4).
 3. **First ball:** higher seed in game 1, then the loser of the previous game; sides swap every game (§7.3).
 4. **Tournament mode:** the tournament owns the table while it runs; free play only after pausing it (§8).
-5. **Manual results** for games not played on the table: allowed, rated like the others (§7.4).
+5. **No manual results** (changed 2026-11-25, task 6): every pairing is played on the table (§7.4).
 6. **Monster DYP:** sitting out gives no points; default rounds so everyone plays ≈ 5 games (§6.6).
 7. **Duration estimate:** 22 s per goal and 1 min changeover without data, and the game length follows the stage's target score, lead and time limit (§4).
 8. **Starting pairings:** the table doesn't wait for registrations – a check-in by coin/tag of one player per team, or "Play" in the UI, starts a pairing; any ready pairing can be played out of order (§7.2, §8).
+
+9. **Task 6** (2026-11-25): Monster DYP substitutes take over the slot with its points; dropped teams don't qualify and get no place; no dropout while on the table; no undo; finished tournaments are frozen and reopen when one of their games is voided – any game, not only the final (§10, §11).
 
 ## 16. Open questions
 - None.

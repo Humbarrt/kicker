@@ -9,6 +9,7 @@ package tournament
 import (
 	"fmt"
 	"sort"
+	"strconv"
 )
 
 // Format is how one stage is played (spec 09 §6).
@@ -56,6 +57,26 @@ type Setup struct {
 	Stages    []Stage    // at least one; only the last may be a knockout
 	TieBreaks []TieBreak // nil = DefaultTieBreaks
 	Seed      int64      // for the random draws (Monster DYP partners)
+	// Drops are the teams (by team id) or, in Monster DYP, the players (by their place in
+	// Players, from 1) that dropped out (spec 09 §10).
+	Drops map[int]Drop
+}
+
+// Drop is when a team or player dropped out and what happens to its pairings (spec 09 §10):
+//   - from then on its undecided pairings are walkovers for the opponent (knockouts: also the
+//     ones it would have reached; groups and round robin: forfeits);
+//   - with Annul (groups, round robin: fewer than half of its pairings played) all its pairings
+//     of that stage don't count;
+//   - Swiss and Monster DYP don't draw it into rounds after Round;
+//   - it doesn't qualify for a later stage and is ranked last in the stage it dropped out of.
+//
+// A team that dropped out in a later stage keeps its results and qualification from earlier
+// ones, so nothing that was already played is drawn again.
+type Drop struct {
+	Stage int  `json:"stage"`           // index in Stages
+	Round int  `json:"round,omitempty"` // Swiss, Monster DYP: the rounds drawn at the time
+	Annul bool `json:"annul,omitempty"`
+	Seq   int  `json:"seq"` // 1, 2, …: when both sides dropped out, the one that dropped out later goes on
 }
 
 // Side is A or B of a pairing. A is the higher seed (spec 09 §7.3).
@@ -94,6 +115,62 @@ type Entrant struct {
 	Team    int     // team id (= seed in Setup.Teams); 0 for Monster DYP pairs and byes
 	Players []int64 // the players
 	Bye     bool
+	Slots   []int // Monster DYP: the players' places in Setup.Players, from 1
+	drop    *Drop // fixed teams and Monster DYP players
+}
+
+// Key identifies an entrant across derivations, even after a player was replaced: "t3" (team
+// 3), "p2+7" (Monster DYP players 2 and 7), "bye".
+func (e *Entrant) Key() string {
+	switch {
+	case e == nil:
+		return ""
+	case e.Bye:
+		return "bye"
+	case len(e.Slots) > 0:
+		k := "p"
+		for i, s := range e.Slots {
+			if i > 0 {
+				k += "+"
+			}
+			k += strconv.Itoa(s)
+		}
+		return k
+	}
+	return "t" + strconv.Itoa(e.Team)
+}
+
+// Dropped reports whether the entrant had dropped out by the given stage.
+func (e *Entrant) Dropped(stage int) bool { return e != nil && e.drop != nil && e.drop.Stage <= stage }
+
+// Sides identifies who a pairing is between ("t1-t4"): a pairing that was played by other sides
+// than it has now is a conflict (spec 09 §11).
+func (p *Pairing) Sides() string {
+	if p.A == nil || p.B == nil {
+		return ""
+	}
+	return p.A.Key() + "-" + p.B.Key()
+}
+
+// Conflicts lists the pairings whose games were played by other sides than the tournament puts
+// there now (played maps a pairing key to the sides it was played by), in order.
+func (s *State) Conflicts(played map[string]string) []string {
+	var out []string
+	for _, p := range s.Pairings() {
+		if want, ok := played[p.Key]; ok && want != "" && want != p.Sides() {
+			out = append(out, p.Key)
+		}
+		delete(played, p.Key)
+	}
+	// Played pairings the tournament doesn't have at all any more.
+	var rest []string
+	for k, v := range played {
+		if v != "" {
+			rest = append(rest, k)
+		}
+	}
+	sort.Strings(rest)
+	return append(out, rest...)
 }
 
 // PairingState is where a pairing stands.
@@ -318,13 +395,19 @@ func Derive(setup Setup, results map[string]Result) (*State, error) {
 	}
 	st := &State{Setup: setup}
 	var entrants []*Entrant
+	drop := func(n int) *Drop {
+		if d, ok := setup.Drops[n]; ok {
+			return &d
+		}
+		return nil
+	}
 	if setup.Stages[0].Format == MonsterDYP {
-		for _, id := range setup.Players {
-			entrants = append(entrants, &Entrant{Players: []int64{id}})
+		for i, id := range setup.Players {
+			entrants = append(entrants, &Entrant{Players: []int64{id}, Slots: []int{i + 1}, drop: drop(i + 1)})
 		}
 	} else {
 		for i, t := range setup.Teams {
-			entrants = append(entrants, &Entrant{Team: i + 1, Players: t.Players})
+			entrants = append(entrants, &Entrant{Team: i + 1, Players: t.Players, drop: drop(i + 1)})
 		}
 	}
 	for i, stage := range setup.Stages {
@@ -407,8 +490,21 @@ func (b *builder) resolve(p *Pairing) {
 		p.A, p.B = p.B, p.A
 	}
 	p.State = Ready
+	if b.annulled(p.A) || b.annulled(p.B) {
+		p.State = Skipped // doesn't count (spec 09 §10)
+		return
+	}
 	r, ok := b.results[p.Key]
 	if !ok {
+		// A side that dropped out loses by walkover. If both did, the one that dropped out later
+		// goes on (and loses its next pairing): what was decided before stays decided.
+		da, db := b.dropped(p.A), b.dropped(p.B)
+		switch {
+		case da > 0 && (db == 0 || da < db):
+			p.State, p.Winner, p.Walkover = Done, B, true
+		case db > 0:
+			p.State, p.Winner, p.Walkover = Done, A, true
+		}
 		return
 	}
 	if r.Walkover != NoSide {
@@ -435,6 +531,38 @@ func (b *builder) resolve(p *Pairing) {
 	case p.WinsB >= need:
 		p.State, p.Winner = Done, B
 	}
+}
+
+// dropped tells whether a side (or, in Monster DYP, one of its players) has dropped out: the
+// Seq of the first dropout, 0 if none.
+func (b *builder) dropped(e *Entrant) int {
+	if e.Dropped(b.stage) {
+		return max(e.drop.Seq, 1)
+	}
+	seq := 0
+	for _, s := range e.Slots {
+		if d, ok := b.setup.Drops[s]; ok && d.Stage <= b.stage && (seq == 0 || max(d.Seq, 1) < seq) {
+			seq = max(d.Seq, 1)
+		}
+	}
+	return seq
+}
+
+// annulled reports whether a side's pairings of this stage don't count.
+func (b *builder) annulled(e *Entrant) bool {
+	return e.drop != nil && e.drop.Annul && e.drop.Stage == b.stage
+}
+
+// active leaves out who dropped out of this stage before round r was drawn (Swiss, Monster DYP).
+func (b *builder) active(es []*Entrant, r int) []*Entrant {
+	var out []*Entrant
+	for _, e := range es {
+		if d := e.drop; d != nil && (d.Stage < b.stage || d.Stage == b.stage && r > d.Round) {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 // complete reports whether every pairing of the stage is decided.

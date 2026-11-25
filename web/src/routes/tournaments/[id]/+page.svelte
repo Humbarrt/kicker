@@ -13,6 +13,7 @@
 	import Standings from '#lib/components/tournament/Standings.svelte';
 	import Pairing from '#lib/components/tournament/Pairing.svelte';
 	import Team from '#lib/components/tournament/Team.svelte';
+	import TournamentChanges from '#lib/components/tournament/TournamentChanges.svelte';
 
 	const id = $derived(Number(page.params.id));
 	let d = $state<TournamentDetail | null>(null);
@@ -56,6 +57,25 @@
 	function playerNames(ids: number[]): string {
 		return ids.map((i) => (players.get(i) ? tPlayer(players.get(i)!) : '…')).join(', ');
 	}
+	// A history entry with what it changed (spec 09 §11).
+	function eventText(e: TournamentDetail['events'][number]): string {
+		const x = e.details as Record<string, unknown>;
+		const base = t(('tourn.event.' + e.kind) as Key);
+		const name = (id: unknown) => (players.get(id as number) ? tPlayer(players.get(id as number)!) : '…');
+		switch (e.kind) {
+			case 'paused':
+				return x.reason === 'sleep' ? `${base} · ${t('tourn.paused_by_sleep')}` : base;
+			case 'player_replaced':
+				return `${base}: ${name(x.old_player)} → ${name(x.new_player)}`;
+			case 'dropout':
+				return `${base}: ${playerNames((x.players as number[]) ?? [])}${x.annul ? ' · ' + t('tourn.annulled') : ''}`;
+			case 'rebuilt':
+				return `${base}: ${t('tourn.replayed', { n: ((x.pairings as string[]) ?? []).length })}`;
+			case 'edited':
+				return x.name ? `${t('tourn.event.renamed')}: ${x.name}` : x.rules_from_stage ? t('tourn.event.rules_changed') : base;
+		}
+		return base;
+	}
 	function advanceOf(stageIndex: number): number {
 		const s = d?.settings.stages[stageIndex];
 		return s?.format === 'groups' ? (s.advance ?? 2) : 0;
@@ -98,6 +118,17 @@
 			</div>
 		</section>
 
+		{#if d.conflicts.length}
+			<section class="notice space-y-2" data-testid="conflicts">
+				<p class="font-medium">{t('tourn.conflicts', { n: d.conflicts.length })}</p>
+				<p class="text-sm">{t('tourn.conflicts_hint')}</p>
+				{#if d.can.manage}
+					<button class="btn btn-sm btn-primary" disabled={busy || !!d.staged} data-testid="rebuild"
+						onclick={() => act(() => api.rebuildTournament(d!.id), t('tourn.confirm_rebuild'))}>{t('tourn.rebuild')}</button>
+				{/if}
+			</section>
+		{/if}
+
 		{#if d.placements.length}
 			<section class="card" data-testid="podium">
 				<h2 class="h2 mb-3">{t('tourn.placements')}</h2>
@@ -105,7 +136,7 @@
 					{#each d.placements as p (p.place + '-' + p.players.join())}
 						<li class="flex items-center gap-3 rounded-xl bg-stone-50 px-3 py-2">
 							<span class="text-2xl">{medal[p.place]}</span>
-							<Team entrant={{ team: p.team, players: p.players }} size={28} winner={p.place === 1} />
+							<Team entrant={{ team: p.team, players: p.players }} size={28} winner={p.place === 1} link />
 						</li>
 					{/each}
 				</ol>
@@ -148,7 +179,7 @@
 					{#if stage.best_of > 1}<span class="chip ml-2 align-middle">{t('tourn.best_of', { n: stage.best_of })}</span>{/if}
 				</h2>
 				{#if stage.format === 'knockout' || stage.format === 'double_knockout'}
-					<Bracket {stage} staged={d.staged} here={d.checked_in} />
+					<Bracket {stage} staged={d.staged} here={d.checked_in} conflicts={d.conflicts} />
 				{:else if stage.format === 'groups'}
 					<div class="grid gap-4 lg:grid-cols-2">
 						{#each stage.groups as g (g.name)}
@@ -185,13 +216,17 @@
 			</section>
 		{/each}
 
+		{#if d.can.change}
+			<TournamentChanges {d} onchange={(x) => (d = x)} />
+		{/if}
+
 		<section class="card">
 			<h2 class="h2 mb-2">{t('tourn.history')}</h2>
 			<ul class="space-y-1 text-sm">
 				{#each [...d.events].reverse() as e, i (i)}
 					<li class="flex gap-3">
 						<span class="w-44 shrink-0 whitespace-nowrap text-stone-500 tabular-nums">{dateTime(e.at, i18n.lang)}</span>
-						<span>{t(('tourn.event.' + e.kind) as Key)}{#if e.kind === 'paused' && (e.details as { reason?: string }).reason === 'sleep'} · {t('tourn.paused_by_sleep')}{/if}</span>
+						<span>{eventText(e)}</span>
 					</li>
 				{/each}
 			</ul>

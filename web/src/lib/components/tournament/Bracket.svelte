@@ -6,7 +6,7 @@
 	import { roundLabel, pairingScore } from '#lib/tournaments.ts';
 	import Team from './Team.svelte';
 
-	let { stage, staged = '', here = [] }: { stage: TStage; staged?: string; here?: number[] } = $props();
+	let { stage, staged = '', here = [], conflicts = [] }: { stage: TStage; staged?: string; here?: number[]; conflicts?: string[] } = $props();
 
 	function columns(bracket: string): { round: number; pairings: TPairing[] }[] {
 		const ps = stage.pairings.filter((p) => p.bracket === bracket);
@@ -28,7 +28,7 @@
 	{@const done = p.state === 'done' || p.state === 'bye'}
 	{@const only = done && p.games.length === 1 ? p.games[0] : null}
 	<svelte:element this={only ? 'a' : 'div'} href={only ? `/games/${only.game_id}` : undefined}
-		class="block w-56 rounded-xl border bg-white px-3 py-2 text-sm shadow-xs {only ? 'hover:bg-stone-50' : ''} {p.key === staged ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-stone-200'} {p.state === 'bye' ? 'opacity-60' : ''}"
+		class="block w-56 rounded-xl border bg-white px-3 py-2 text-sm shadow-xs {only ? 'hover:bg-stone-50' : ''} {p.key === staged ? 'border-emerald-500 ring-2 ring-emerald-200' : conflicts.includes(p.key) ? 'border-amber-400 ring-2 ring-amber-200' : 'border-stone-200'} {p.state === 'bye' ? 'opacity-60' : ''}"
 		data-testid="bracket-match" data-key={p.key}>
 		<div class="flex items-center gap-2"><span class="min-w-0 flex-1"><Team entrant={p.a} {here} size={20} winner={done && p.winner === 'a'} loser={done && p.winner === 'b'} /></span>
 			{#if p.state === 'done'}<span class="tabular-nums {p.winner === 'a' ? 'font-semibold' : 'text-stone-400'}">{p.best_of > 1 ? p.wins_a : (p.games.at(-1)?.goals_a ?? '')}</span>{/if}</div>

@@ -45,7 +45,9 @@ type Settings struct {
 	TieBreaks   []tournament.TieBreak `json:"tie_breaks,omitempty"`
 	Seed        int64                 `json:"seed,omitempty"`         // the draw seed, fixed at the start
 	ManualSeeds bool                  `json:"manual_seeds,omitempty"` // keep the setup's team order instead of seeding by rating
-	PresetID    *int64                `json:"preset_id,omitempty"`    // the preset the stages' rules were copied from (shown in the setup)
+	// Drops are the teams (team number) or Monster DYP players (place, from 1) that dropped out.
+	Drops    map[int]tournament.Drop `json:"drops,omitempty"`
+	PresetID *int64                  `json:"preset_id,omitempty"` // the preset the stages' rules were copied from (shown in the setup)
 }
 
 // StageSettings is a stage with the rules its games are played with.
@@ -73,6 +75,9 @@ var (
 	ErrNotRunning   = errors.New("the tournament isn't running")
 	ErrNotReady     = errors.New("that pairing can't be played now")
 	ErrBadSetup     = errors.New("invalid tournament setup")
+	ErrOnTable      = errors.New("that team is on the table")
+	ErrNoConflicts  = errors.New("nothing to rebuild")
+	ErrInTournament = errors.New("that player already takes part")
 )
 
 // Options are the service's dependencies.
@@ -200,7 +205,9 @@ func (s *Service) gameFinished(ctx context.Context, gameID int64) error {
 	}
 	s.publish(tid)
 	if tid != s.active {
-		return nil // an edit of an older tournament: its brackets are derived when read
+		// An edit of another tournament: its brackets are derived when read; a finished one only
+		// changes when one of its games is voided.
+		return s.reopenIfVoided(ctx, tid, g)
 	}
 	st, _, _, err := s.derive(ctx, tid)
 	if err != nil {
@@ -215,17 +222,56 @@ func (s *Service) gameFinished(ctx context.Context, gameID int64) error {
 		return s.stage(ctx, tid, st, p)
 	}
 	if st.Finished {
-		s.log.Info("tournament finished", "tournament", tid)
-		if err := s.opts.Store.SetTournamentState(ctx, tid, "running", "finished", nil, nil, st.Placements); err != nil {
-			return err
-		}
-		s.active, s.staged, s.last = 0, "", ""
-		clear(s.checkIns)
-		s.publish(tid)
-		return s.opts.Table.Do(ctx, engine.SetTournament{On: false})
+		return s.finish(ctx, tid, st)
 	}
 	s.last = key
 	return s.stageNext(ctx, "")
+}
+
+// finish ends the running tournament: placements stored, results frozen (spec 09 §11).
+func (s *Service) finish(ctx context.Context, tid int64, st *tournament.State) error {
+	s.log.Info("tournament finished", "tournament", tid)
+	raw, err := s.opts.Store.TournamentResults(ctx, tid)
+	if err != nil {
+		return err
+	}
+	if err := s.opts.Store.FinishTournament(ctx, tid, st.Placements, raw); err != nil {
+		return err
+	}
+	s.active, s.staged, s.last = 0, "", ""
+	clear(s.checkIns)
+	s.publish(tid)
+	return s.opts.Table.Do(ctx, engine.SetTournament{On: false})
+}
+
+// reopenIfVoided reopens a finished tournament when one of the games it was frozen with is
+// voided: the pairing has to be played again (spec 09 §11). Other edits don't change it.
+func (s *Service) reopenIfVoided(ctx context.Context, tid int64, g store.Game) error {
+	if !g.Voided {
+		return nil
+	}
+	t, _, err := s.opts.Store.Tournament(ctx, tid)
+	if err != nil || t.State != "finished" {
+		return err
+	}
+	frozen, err := t.FrozenResults()
+	if err != nil {
+		return err
+	}
+	for key, r := range frozen {
+		for _, fg := range r.Games {
+			if fg.GameID == g.ID {
+				s.log.Info("tournament reopened: a game was voided", "tournament", tid, "game", g.ID)
+				if err := s.opts.Store.SetTournamentState(ctx, tid, "finished", "paused", nil, nil,
+					map[string]any{"game": g.ID, "pairing": key}); err != nil {
+					return err
+				}
+				s.publish(tid)
+				return nil
+			}
+		}
+	}
+	return nil
 }
 
 // lastGameOf returns the id of the pairing's latest game (an edit of an earlier one doesn't
@@ -334,6 +380,12 @@ func (s *Service) Continue(ctx context.Context, id int64, author *int64) error {
 	if err := s.opts.Table.Do(ctx, engine.SetTournament{On: true}); err != nil {
 		return err
 	}
+	// Decided meanwhile (a dropout, or a reopened tournament whose void was taken back).
+	if st, _, _, err := s.derive(ctx, id); err != nil {
+		return err
+	} else if st.Finished {
+		return s.finish(ctx, id, st)
+	}
 	gameID, ok, err := s.opts.Store.TournamentPausedGame(ctx, id)
 	if err != nil || !ok {
 		return err
@@ -417,7 +469,7 @@ func (s *Service) derive(ctx context.Context, id int64) (*tournament.State, stor
 	if err != nil {
 		return nil, t, set, err
 	}
-	raw, err := s.opts.Store.TournamentResults(ctx, id)
+	raw, err := s.results(ctx, t)
 	if err != nil {
 		return nil, t, set, err
 	}
@@ -425,13 +477,22 @@ func (s *Service) derive(ctx context.Context, id int64) (*tournament.State, stor
 	return st, t, set, err
 }
 
+// results are a tournament's pairing results: as frozen at the finish, otherwise the games now.
+func (s *Service) results(ctx context.Context, t store.Tournament) (map[string]store.PairingResult, error) {
+	if t.State == "finished" && len(t.Frozen) > 0 {
+		return t.FrozenResults()
+	}
+	return s.opts.Store.TournamentResults(ctx, t.ID)
+}
+
 // setupOf turns the stored participants into the core's setup: teams by team number, players
 // by seed.
 func (s *Service) setupOf(set Settings, ps []store.TournamentParticipant) (tournament.Setup, error) {
-	setup := tournament.Setup{TieBreaks: set.TieBreaks, Seed: set.Seed}
+	setup := tournament.Setup{TieBreaks: set.TieBreaks, Seed: set.Seed, Drops: set.Drops}
 	for _, st := range set.Stages {
 		setup.Stages = append(setup.Stages, st.Stage)
 	}
+	ps = current(ps)
 	if set.TeamMode == Monster {
 		for _, p := range ps {
 			setup.Players = append(setup.Players, p.PlayerID)
@@ -460,6 +521,17 @@ func (s *Service) setupOf(set Settings, ps []store.TournamentParticipant) (tourn
 		return setup, fmt.Errorf("%w: %v", ErrBadSetup, err)
 	}
 	return setup, nil
+}
+
+// current leaves out replaced participants: the ones playing now, in seed order.
+func current(ps []store.TournamentParticipant) []store.TournamentParticipant {
+	out := make([]store.TournamentParticipant, 0, len(ps))
+	for _, p := range ps {
+		if p.ReplacedBy == nil {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // drawAndSeed makes the final teams: DYP draws them; fixed and drawn teams are seeded by rating
@@ -630,7 +702,7 @@ func (s *Service) stage(ctx context.Context, tid int64, st *tournament.State, p 
 	if err != nil {
 		return err
 	}
-	pid, err := s.opts.Store.PairingID(ctx, tid, p.Key)
+	pid, err := s.opts.Store.PairingID(ctx, tid, p.Key, p.Sides())
 	if err != nil {
 		return err
 	}

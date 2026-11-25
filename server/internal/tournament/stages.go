@@ -17,7 +17,7 @@ func (s *State) qualifiers(stage int) []*Entrant {
 	if ss.Stage.Format != Groups {
 		var out []*Entrant
 		for _, r := range s.Standings(stage, "") {
-			if len(out) == adv {
+			if len(out) == adv || r.Dropped {
 				break
 			}
 			out = append(out, r.Entrant)
@@ -31,6 +31,9 @@ func (s *State) qualifiers(stage int) []*Entrant {
 	var places [][]Row
 	for _, g := range ss.Groups {
 		for k, r := range s.Standings(stage, g) {
+			if r.Dropped {
+				break // ranked last: the next best moves up (spec 09 §10)
+			}
 			for len(places) <= k {
 				places = append(places, nil)
 			}
@@ -109,11 +112,14 @@ func (s *State) placements() []Placement {
 		}
 		return best
 	}
-	real := func(e *Entrant) bool { return e != nil && !e.Bye }
+	// Who dropped out gets no place (spec 09 §10).
+	real := func(e *Entrant) bool { return e != nil && !e.Bye && !e.Dropped(last) }
 	switch ss.Stage.Format {
 	case Knockout:
 		final := find("W", 0)
-		out = append(out, place(1, final.WinnerEntrant()))
+		if real(final.WinnerEntrant()) {
+			out = append(out, place(1, final.WinnerEntrant()))
+		}
 		if real(final.LoserEntrant()) {
 			out = append(out, place(2, final.LoserEntrant()))
 		}
@@ -133,7 +139,9 @@ func (s *State) placements() []Placement {
 		if reset := find("GF", 2); reset != nil && reset.State == Done {
 			gf = reset
 		}
-		out = append(out, place(1, gf.WinnerEntrant()))
+		if real(gf.WinnerEntrant()) {
+			out = append(out, place(1, gf.WinnerEntrant()))
+		}
 		if real(gf.LoserEntrant()) {
 			out = append(out, place(2, gf.LoserEntrant()))
 		}
@@ -142,7 +150,7 @@ func (s *State) placements() []Placement {
 		}
 	default:
 		for i, r := range s.Standings(last, "") {
-			if i == 3 {
+			if i == 3 || r.Dropped {
 				break
 			}
 			if ss.Stage.Format == MonsterDYP {

@@ -72,8 +72,14 @@
 								<li class="flex items-center gap-2 {i === 0 ? 'flex-row-reverse' : ''}">
 									{#if seat}
 										{@const p = players.get(seat.player_id)}
-										{#if p}<PlayerAvatar player={p} size={28} />{:else}<span class="grid size-7 place-items-center rounded-full bg-stone-200 text-xs">?</span>{/if}
-										<span class="truncate">{playerName(seat.player_id)}</span>
+										{#if p}
+											<a href="/players/{p.id}" class="flex min-w-0 items-center gap-2 hover:underline {i === 0 ? 'flex-row-reverse' : ''}" data-testid="seat-player">
+												<PlayerAvatar player={p} size={28} /><span class="truncate">{playerName(seat.player_id)}</span>
+											</a>
+										{:else}
+											<span class="grid size-7 place-items-center rounded-full bg-stone-200 text-xs">?</span>
+											<span class="truncate">{playerName(seat.player_id)}</span>
+										{/if}
 										{#if seat.player_id != null && change[seat.player_id] != null}
 											{@const c = Math.round(change[seat.player_id])}
 											<span class="text-sm font-semibold tabular-nums {c > 0 ? 'text-emerald-700' : c < 0 ? 'text-red-700' : 'text-stone-500'}">{c > 0 ? '+' : ''}{c}</span>

@@ -3,14 +3,14 @@
 	// from the options sorted by how long they take – its options, and the game rules.
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { api, type Preset, type TournamentRules, type TeamMode, type TournamentDetail, type TournamentOption, type TournamentStage } from '#lib/api/client.ts';
+	import { api, type TournamentRules, type TeamMode, type TournamentDetail, type TournamentOption, type TournamentStage } from '#lib/api/client.ts';
 	import { players } from '#lib/players.svelte.ts';
 	import { i18n, t, tErr, tPlayer, type Key } from '#lib/i18n.svelte.ts';
 	import { dateTime } from '#lib/format.ts';
 	import { estimateText, formatName, optionName } from '#lib/tournaments.ts';
-	import { describeRules } from '#lib/rules.ts';
 	import PlayerAvatar from '#lib/components/PlayerAvatar.svelte';
 	import PlayerPicker from '#lib/components/PlayerPicker.svelte';
+	import RulesPicker from './RulesPicker.svelte';
 
 	let { initial = null }: { initial?: TournamentDetail | null } = $props();
 	onMount(() => void players.reload()); // the list to pick from
@@ -33,37 +33,9 @@
 	let stages = $state<TournamentStage[]>(init.stages);
 	let manualSeeds = $state(init.manual);
 
-	// --- game rules: a preset (copied into the tournament, so editing the preset later doesn't
-	// change it) or custom rules, like "New game". Default: the built-in "Official" preset.
-	const firstRules = init.stages[0]?.rules ?? null;
-	let presets = $state<Preset[]>([]);
-	let choice = $state(''); // a preset id or 'custom'
-	let custom = $state({ win_score: firstRules?.win_score ?? 10, win_by: firstRules?.win_by ?? 2, max_score: (firstRules?.max_score ?? '') as string | number, minutes: (firstRules?.time_limit_s ? firstRules.time_limit_s / 60 : '') as string | number });
-	onMount(() => {
-		api.presets().then((p) => {
-			presets = p;
-			const saved = initial?.settings.preset_id;
-			const official = p.find((x) => x.builtin && x.label === 'Official') ?? p[0];
-			if (saved != null && p.some((x) => x.id === saved)) choice = String(saved);
-			else if (initial && firstRules) choice = String(p.find((x) => sameRules(fromPreset(x), firstRules))?.id ?? 'custom');
-			else choice = official ? String(official.id) : 'custom';
-		}).catch((e) => (error = tErr(e)));
-	});
-	function fromPreset(p: Preset): TournamentRules {
-		return { win_score: p.rules.win_score, win_by: p.rules.win_by, max_score: p.rules.max_score ?? undefined, time_limit_s: p.rules.time_limit_s ?? undefined };
-	}
-	function sameRules(a: TournamentRules, b: TournamentRules): boolean {
-		return a.win_score === b.win_score && a.win_by === b.win_by && (a.max_score ?? 0) === (b.max_score ?? 0) && (a.time_limit_s ?? 0) === (b.time_limit_s ?? 0);
-	}
-	const num = (x: string | number) => (x === '' || x === null ? undefined : Number(x));
-	const rules = $derived.by((): TournamentRules | undefined => {
-		if (choice === 'custom') {
-			const m = num(custom.minutes);
-			return { win_score: Number(custom.win_score), win_by: Number(custom.win_by), max_score: num(custom.max_score), time_limit_s: m ? Math.round(m * 60) : undefined };
-		}
-		const p = presets.find((x) => String(x.id) === choice);
-		return p ? fromPreset(p) : undefined;
-	});
+	// --- game rules (RulesPicker): a preset, copied into the tournament, or custom rules.
+	let rules = $state<TournamentRules | undefined>();
+	let presetId = $state<number | undefined>();
 	let error = $state('');
 	let busy = $state(false);
 
@@ -139,7 +111,7 @@
 		return s.length === stages.length && s.every((x, i) => x.format === stages[i].format && (x.groups ?? 0) === (stages[i].groups ?? 0));
 	}
 	function choose(o: TournamentOption) {
-		stages = structuredClone(o.stages);
+		stages = $state.snapshot(o.stages); // options is reactive state: structuredClone can't copy its proxies
 	}
 
 	async function save() {
@@ -147,7 +119,7 @@
 		error = '';
 		const input = {
 			name,
-			settings: { team_mode: mode, manual_seeds: manualSeeds, preset_id: choice === 'custom' ? undefined : Number(choice), stages: stages.map((s) => ({ ...s, rules })) },
+			settings: { team_mode: mode, manual_seeds: manualSeeds, preset_id: presetId, stages: stages.map((s) => ({ ...s, rules })) },
 			participants:
 				mode === 'fixed'
 					? entries.flatMap((team, i) => team.map((id) => ({ player_id: id, team: i + 1 })))
@@ -287,38 +259,7 @@
 			</div>
 		{/each}
 
-		<fieldset class="space-y-2">
-			<legend class="label">{t('tourn.rules')}</legend>
-			{#each presets as p (p.id)}
-				<label class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {choice === String(p.id) ? 'border-emerald-600 bg-emerald-50' : 'border-stone-200 hover:bg-stone-50'}">
-					<input type="radio" name="t-rules" value={String(p.id)} bind:group={choice} />
-					<span class="flex-1">
-						<span class="block font-medium">{p.label}</span>
-						<span class="muted">{describeRules(p.rules)}</span>
-					</span>
-				</label>
-			{/each}
-			<label class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {choice === 'custom' ? 'border-emerald-600 bg-emerald-50' : 'border-stone-200 hover:bg-stone-50'}">
-				<input type="radio" name="t-rules" value="custom" bind:group={choice} />
-				<span class="flex-1">
-					<span class="block font-medium">{t('board.custom')}</span>
-					<span class="muted">{t('tourn.custom_hint')}</span>
-				</span>
-			</label>
-			{#if choice === 'custom'}
-				<div class="grid gap-4 rounded-xl bg-stone-50 p-4 sm:grid-cols-2">
-					<label><span class="label">{t('rules.win_score')}</span>
-						<input class="input" type="number" min="1" max="99" required bind:value={custom.win_score} /></label>
-					<label><span class="label">{t('rules.win_by')}</span>
-						<input class="input" type="number" min="1" max="10" required bind:value={custom.win_by} /></label>
-					<label><span class="label">{t('rules.max_score')}</span>
-						<input class="input" type="number" min="1" max="99" bind:value={custom.max_score} placeholder={t('board.no_cap')} /></label>
-					<label><span class="label">{t('rules.time_limit')}</span>
-						<input class="input" type="number" min="1" max="1440" bind:value={custom.minutes} placeholder={t('board.no_limit')} /></label>
-				</div>
-			{/if}
-			<p class="muted text-sm">{t('tourn.rules_note')}</p>
-		</fieldset>
+		<RulesPicker initial={init.stages[0]?.rules ?? null} initialPreset={initial?.settings.preset_id} bind:rules bind:presetId />
 	</section>
 
 	{#if error}<p class="error">{error}</p>{/if}

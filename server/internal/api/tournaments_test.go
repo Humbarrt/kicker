@@ -181,6 +181,41 @@ func TestTournamentRoutes(t *testing.T) {
 			t.Errorf("%s: %d %s", step.path, code, d.State)
 		}
 	}
+	// Changing the paused tournament (spec 09 §10–11).
+	if code := f.do(t, f.member, "PATCH", fmt.Sprintf("/api/tournaments/%d", id), `{"name":"Mine now"}`, nil); code != 403 {
+		t.Errorf("member renamed the admin's tournament: %d", code)
+	}
+	if code := f.do(t, f.admin, "PATCH", fmt.Sprintf("/api/tournaments/%d", id), `{"name":"Friday cup"}`, &d); code != 200 || d.Name != "Friday cup" || !d.Can.Change {
+		t.Errorf("rename: %d %q %+v", code, d.Name, d.Can)
+	}
+	eva, err := f.st.CreatePlayer(context.Background(), store.Player{Name: "Eva", Color: "#1e3a8a"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := f.do(t, f.admin, "POST", fmt.Sprintf("/api/tournaments/%d/replace", id),
+		fmt.Sprintf(`{"participant":%d,"player":%d}`, d.Participants[1].ID, eva), &d); code != 200 || d.Teams[1].Players[0] != eva {
+		t.Errorf("replace: %d %+v", code, d.Teams)
+	}
+	if code := f.do(t, f.admin, "POST", fmt.Sprintf("/api/tournaments/%d/replace", id),
+		fmt.Sprintf(`{"participant":%d,"player":%d}`, d.Participants[0].ID, eva), &e); code != 409 || e.Code != "in_tournament" {
+		t.Errorf("Eva twice: %d %+v", code, e)
+	}
+	if code := f.do(t, f.admin, "POST", fmt.Sprintf("/api/tournaments/%d/dropout", id), `{"entrant":4}`, &d); code != 200 || !d.Teams[3].Dropped {
+		t.Errorf("dropout: %d %+v", code, d.Teams)
+	}
+	for _, sv := range d.Stages {
+		for _, p := range sv.Pairings {
+			if p.Key == "s1-W-1-1" && (!p.Walkover || p.Winner != "a") {
+				t.Errorf("the dropped team's pairing: %+v", p)
+			}
+		}
+	}
+	if code := f.do(t, f.admin, "POST", fmt.Sprintf("/api/tournaments/%d/rebuild", id), "", &e); code != 409 || e.Code != "no_conflicts" {
+		t.Errorf("rebuild: %d %+v", code, e)
+	}
+	if code := f.do(t, f.member, "POST", fmt.Sprintf("/api/tournaments/%d/rebuild", id), "", nil); code != 403 {
+		t.Errorf("member rebuilt: %d", code)
+	}
 	if code := f.do(t, f.member, "POST", fmt.Sprintf("/api/tournaments/%d/abandon", mine.ID), "", nil); code != 403 {
 		t.Errorf("member abandoned (tournaments.manage): %d", code)
 	}

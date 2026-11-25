@@ -19,6 +19,7 @@ type Tournament struct {
 	CreatedAt      time.Time
 	StartedAt      *time.Time
 	EndedAt        *time.Time
+	Frozen         json.RawMessage // finished: the pairing results at the finish (map key → PairingResult)
 }
 
 // TournamentParticipant is a player in a tournament.
@@ -28,6 +29,9 @@ type TournamentParticipant struct {
 	TeamNo    *int // team id (= seed of the team) once teams exist; nil for Monster DYP
 	Seed      int  // the player's place in the tournament's order
 	DroppedAt *time.Time
+	// ReplacedBy is the participant who took this player's place (spec 09 §10); the row stays
+	// for the history and the player's profile.
+	ReplacedBy *int64
 }
 
 // TournamentEvent is an entry of a tournament's history.
@@ -41,32 +45,37 @@ type TournamentEvent struct {
 
 // PairingGame is a finished, valid game of a pairing, as the tournament counts it.
 type PairingGame struct {
-	GameID    int64
-	ASide     string  // home | away: where team A played
-	Winner    *string // home | away
-	HomeGoals int
-	AwayGoals int
-	EndedAt   time.Time
+	GameID    int64     `json:"game_id"`
+	ASide     string    `json:"a_side"`           // home | away: where team A played
+	Winner    *string   `json:"winner,omitempty"` // home | away
+	HomeGoals int       `json:"home_goals"`
+	AwayGoals int       `json:"away_goals"`
+	EndedAt   time.Time `json:"ended_at"`
 }
 
 // PairingResult is what the store knows about a played pairing.
 type PairingResult struct {
-	ID       int64
-	Walkover string // "" | a | b
-	Games    []PairingGame
+	ID       int64         `json:"id"`
+	Walkover string        `json:"walkover,omitempty"` // "" | a | b
+	Sides    string        `json:"sides,omitempty"`    // who it was put on the table for (tournament.Pairing.Sides)
+	Games    []PairingGame `json:"games,omitempty"`
 }
 
 // ErrTournamentState is returned when a change isn't possible in the tournament's state.
 var ErrTournamentState = errors.New("not possible in this tournament state")
 
-const tournamentCols = `id, name, owner_account_id, state, settings, created_at, started_at, ended_at`
+const tournamentCols = `id, name, owner_account_id, state, settings, created_at, started_at, ended_at, frozen`
 
 func scanTournament(sc interface{ Scan(...any) error }) (Tournament, error) {
 	var t Tournament
 	var owner, started, ended sql.NullInt64
 	var settings string
+	var frozen sql.NullString
 	var created int64
-	err := sc.Scan(&t.ID, &t.Name, &owner, &t.State, &settings, &created, &started, &ended)
+	err := sc.Scan(&t.ID, &t.Name, &owner, &t.State, &settings, &created, &started, &ended, &frozen)
+	if frozen.Valid {
+		t.Frozen = json.RawMessage(frozen.String)
+	}
 	t.OwnerAccountID, t.Settings, t.CreatedAt = int64Ptr(owner), json.RawMessage(settings), time.UnixMilli(created)
 	if started.Valid {
 		t.StartedAt = Ptr(time.UnixMilli(started.Int64))
@@ -127,7 +136,7 @@ func (s *Store) Tournament(ctx context.Context, id int64) (Tournament, []Tournam
 	if err != nil {
 		return t, nil, err
 	}
-	rows, err := s.r.QueryContext(ctx, `SELECT id, player_id, team_no, seed, dropped_at FROM tournament_participants
+	rows, err := s.r.QueryContext(ctx, `SELECT id, player_id, team_no, seed, dropped_at, replaced_by FROM tournament_participants
 		WHERE tournament_id = ? ORDER BY seed, id`, id)
 	if err != nil {
 		return t, nil, err
@@ -136,11 +145,11 @@ func (s *Store) Tournament(ctx context.Context, id int64) (Tournament, []Tournam
 	ps := []TournamentParticipant{}
 	for rows.Next() {
 		var p TournamentParticipant
-		var team, dropped sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.PlayerID, &team, &p.Seed, &dropped); err != nil {
+		var team, dropped, replaced sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.PlayerID, &team, &p.Seed, &dropped, &replaced); err != nil {
 			return t, nil, err
 		}
-		p.TeamNo = intPtr(team)
+		p.TeamNo, p.ReplacedBy = intPtr(team), int64Ptr(replaced)
 		if dropped.Valid {
 			p.DroppedAt = Ptr(time.UnixMilli(dropped.Int64))
 		}
@@ -223,6 +232,7 @@ var tournamentMoves = map[[2]string]string{
 	{"running", "abandoned"}: "abandoned",
 	{"paused", "abandoned"}:  "abandoned",
 	{"abandoned", "paused"}:  "reinstated",
+	{"finished", "paused"}:   "reopened", // a game of it was voided (spec 09 §11)
 }
 
 // SetTournamentState moves a tournament to another state (spec 09 §3) and writes the event.
@@ -241,8 +251,8 @@ func (s *Store) SetTournamentState(ctx context.Context, id int64, from, to strin
 			q, args = q+`, started_at = ?`, append(args, now)
 		case "finished", "abandoned":
 			q, args = q+`, ended_at = ?`, append(args, now)
-		case "reinstated":
-			q += `, ended_at = NULL`
+		case "reinstated", "reopened":
+			q += `, ended_at = NULL, frozen = NULL`
 		}
 		res, err := tx.ExecContext(ctx, q+` WHERE id = ? AND state = ?`, append(args, id, from)...)
 		if err != nil {
@@ -283,29 +293,35 @@ func (s *Store) DeleteTournament(ctx context.Context, id int64) error {
 	})
 }
 
-// PairingID returns the row of a pairing, creating it the first time it is played.
-func (s *Store) PairingID(ctx context.Context, tournamentID int64, key string) (int64, error) {
+// PairingID returns the row of a pairing, creating it the first time it goes on the table.
+// sides (tournament.Pairing.Sides) records who it is played by; a row without games takes the
+// new sides (a pairing staged before and not played).
+func (s *Store) PairingID(ctx context.Context, tournamentID int64, key, sides string) (int64, error) {
 	var id int64
 	err := s.Write(ctx, func(tx *sql.Tx) error {
 		var err error
-		id, err = pairingIDTx(ctx, tx, tournamentID, key)
+		id, err = pairingIDTx(ctx, tx, tournamentID, key, sides)
 		return err
 	})
 	return id, err
 }
 
-func pairingIDTx(ctx context.Context, tx *sql.Tx, tournamentID int64, key string) (int64, error) {
+func pairingIDTx(ctx context.Context, tx *sql.Tx, tournamentID int64, key, sides string) (int64, error) {
 	var id int64
-	err := tx.QueryRowContext(ctx, `INSERT INTO tournament_pairings (tournament_id, key, created_at) VALUES (?, ?, ?)
-		ON CONFLICT (tournament_id, key) DO UPDATE SET key = excluded.key RETURNING id`,
-		tournamentID, key, time.Now().UnixMilli()).Scan(&id)
+	err := tx.QueryRowContext(ctx, `INSERT INTO tournament_pairings (tournament_id, key, sides, created_at) VALUES (?, ?, NULLIF(?, ''), ?)
+		ON CONFLICT (tournament_id, key) DO UPDATE SET sides = CASE
+			WHEN excluded.sides IS NULL THEN sides
+			WHEN sides IS NULL OR NOT EXISTS (SELECT 1 FROM games g WHERE g.pairing_id = tournament_pairings.id) THEN excluded.sides
+			ELSE sides END
+		RETURNING id`,
+		tournamentID, key, sides, time.Now().UnixMilli()).Scan(&id)
 	return id, err
 }
 
 // SetWalkover decides a pairing without playing: side a or b advances; "" takes it back.
 func (s *Store) SetWalkover(ctx context.Context, tournamentID int64, key, side string, author *int64) error {
 	return s.Write(ctx, func(tx *sql.Tx) error {
-		id, err := pairingIDTx(ctx, tx, tournamentID, key)
+		id, err := pairingIDTx(ctx, tx, tournamentID, key, "")
 		if err != nil {
 			return err
 		}
@@ -326,19 +342,19 @@ func (s *Store) SetWalkover(ctx context.Context, tournamentID int64, key, side s
 func (s *Store) TournamentResults(ctx context.Context, tournamentID int64) (map[string]PairingResult, error) {
 	out := map[string]PairingResult{}
 	byID := map[int64]string{}
-	rows, err := s.r.QueryContext(ctx, `SELECT id, key, walkover FROM tournament_pairings WHERE tournament_id = ?`, tournamentID)
+	rows, err := s.r.QueryContext(ctx, `SELECT id, key, walkover, sides FROM tournament_pairings WHERE tournament_id = ?`, tournamentID)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
 		var r PairingResult
 		var key string
-		var w sql.NullString
-		if err := rows.Scan(&r.ID, &key, &w); err != nil {
+		var w, sides sql.NullString
+		if err := rows.Scan(&r.ID, &key, &w, &sides); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		r.Walkover = w.String
+		r.Walkover, r.Sides = w.String, sides.String
 		out[key], byID[r.ID] = r, key
 	}
 	rows.Close()
@@ -484,16 +500,20 @@ type PlayerTournament struct {
 	State      string
 	EndedAt    *time.Time
 	Placements json.RawMessage
+	Replaced   bool // somebody took the player's place (spec 09 §10)
+	Dropped    bool // the player's team dropped out
 }
 
 // PlayerTournaments lists the started tournaments a player took part in, newest first.
 func (s *Store) PlayerTournaments(ctx context.Context, playerID int64) ([]PlayerTournament, error) {
 	rows, err := s.r.QueryContext(ctx, `SELECT t.id, t.name, t.state, t.ended_at,
 			(SELECT e.details FROM tournament_events e WHERE e.tournament_id = t.id AND e.kind = 'finished'
-			 ORDER BY e.id DESC LIMIT 1)
+			 ORDER BY e.id DESC LIMIT 1),
+			(SELECT MIN(p.replaced_by IS NOT NULL) FROM tournament_participants p WHERE p.tournament_id = t.id AND p.player_id = ?1),
+			(SELECT MIN(p.dropped_at IS NOT NULL) FROM tournament_participants p WHERE p.tournament_id = t.id AND p.player_id = ?1)
 		FROM tournaments t
 		WHERE t.state <> 'setup' AND EXISTS (SELECT 1 FROM tournament_participants p
-			WHERE p.tournament_id = t.id AND p.player_id = ?)
+			WHERE p.tournament_id = t.id AND p.player_id = ?1)
 		ORDER BY t.started_at DESC, t.id DESC`, playerID)
 	if err != nil {
 		return nil, err
@@ -504,7 +524,7 @@ func (s *Store) PlayerTournaments(ctx context.Context, playerID int64) ([]Player
 		var pt PlayerTournament
 		var ended sql.NullInt64
 		var details sql.NullString
-		if err := rows.Scan(&pt.ID, &pt.Name, &pt.State, &ended, &details); err != nil {
+		if err := rows.Scan(&pt.ID, &pt.Name, &pt.State, &ended, &details, &pt.Replaced, &pt.Dropped); err != nil {
 			return nil, err
 		}
 		if ended.Valid {
@@ -516,4 +536,125 @@ func (s *Store) PlayerTournaments(ctx context.Context, playerID int64) ([]Player
 		out = append(out, pt)
 	}
 	return out, rows.Err()
+}
+
+// FinishTournament ends a running tournament with its placements, freezing the pairing results
+// it ended with (spec 09 §11).
+func (s *Store) FinishTournament(ctx context.Context, id int64, placements any, frozen map[string]PairingResult) error {
+	fz, err := json.Marshal(frozen)
+	if err != nil {
+		return err
+	}
+	return s.Write(ctx, func(tx *sql.Tx) error {
+		now := time.Now()
+		res, err := tx.ExecContext(ctx, `UPDATE tournaments SET state = 'finished', ended_at = ?, frozen = ?
+			WHERE id = ? AND state = 'running'`, now.UnixMilli(), string(fz), id)
+		if err != nil {
+			return err
+		}
+		if err := mustChangeOne(ctx, tx, res, id); err != nil {
+			return err
+		}
+		return addTournamentEvent(ctx, tx, id, now, nil, "finished", placements)
+	})
+}
+
+// FrozenResults returns the pairing results a finished tournament was frozen with (nil if none).
+func (t Tournament) FrozenResults() (map[string]PairingResult, error) {
+	if len(t.Frozen) == 0 {
+		return nil, nil
+	}
+	out := map[string]PairingResult{}
+	return out, json.Unmarshal(t.Frozen, &out)
+}
+
+// ChangeTournament changes a started tournament's name and settings (rules of later stages, the
+// dropouts) and writes the event – not while in setup or once it has ended.
+func (s *Store) ChangeTournament(ctx context.Context, id int64, name string, settings json.RawMessage, author *int64,
+	kind string, details any) error {
+	return s.Write(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `UPDATE tournaments SET name = ?, settings = ? WHERE id = ? AND state IN ('running', 'paused')`,
+			name, settingsText(settings), id)
+		if err != nil {
+			return err
+		}
+		if err := mustChangeOne(ctx, tx, res, id); err != nil {
+			return err
+		}
+		return addTournamentEvent(ctx, tx, id, time.Now(), author, kind, details)
+	})
+}
+
+// DropOut stores a tournament's settings with a new dropout and marks the team's players.
+func (s *Store) DropOut(ctx context.Context, id int64, settings json.RawMessage, participants []int64, author *int64, details any) error {
+	return s.Write(ctx, func(tx *sql.Tx) error {
+		now := time.Now()
+		res, err := tx.ExecContext(ctx, `UPDATE tournaments SET settings = ? WHERE id = ? AND state IN ('running', 'paused')`,
+			settingsText(settings), id)
+		if err != nil {
+			return err
+		}
+		if err := mustChangeOne(ctx, tx, res, id); err != nil {
+			return err
+		}
+		for _, p := range participants {
+			if _, err := tx.ExecContext(ctx, `UPDATE tournament_participants SET dropped_at = ? WHERE id = ? AND tournament_id = ?`,
+				now.UnixMilli(), p, id); err != nil {
+				return err
+			}
+		}
+		return addTournamentEvent(ctx, tx, id, now, author, "dropout", details)
+	})
+}
+
+// ReplaceParticipant puts another player in a participant's place (same team, same seed) from
+// the next game on; the old row stays, pointing at the new one.
+func (s *Store) ReplaceParticipant(ctx context.Context, id, participant, player int64, author *int64, details any) (int64, error) {
+	var newID int64
+	err := s.Write(ctx, func(tx *sql.Tx) error {
+		var state string
+		if err := tx.QueryRowContext(ctx, `SELECT state FROM tournaments WHERE id = ?`, id).Scan(&state); errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		} else if err != nil {
+			return err
+		}
+		if state != "running" && state != "paused" {
+			return ErrTournamentState
+		}
+		var team sql.NullInt64
+		var seed int
+		err := tx.QueryRowContext(ctx, `SELECT team_no, seed FROM tournament_participants
+			WHERE id = ? AND tournament_id = ? AND replaced_by IS NULL`, participant, id).Scan(&team, &seed)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		} else if err != nil {
+			return err
+		}
+		if err := tx.QueryRowContext(ctx, `INSERT INTO tournament_participants (tournament_id, player_id, team_no, seed)
+			VALUES (?, ?, ?, ?) RETURNING id`, id, player, intPtr(team), seed).Scan(&newID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE tournament_participants SET replaced_by = ? WHERE id = ?`, newID, participant); err != nil {
+			return err
+		}
+		return addTournamentEvent(ctx, tx, id, time.Now(), author, "player_replaced", details)
+	})
+	return newID, err
+}
+
+// UnlinkPairings takes the games of pairings out of a tournament (spec 09 §11 rebuild): they stay
+// as normal games; the pairings are played again.
+func (s *Store) UnlinkPairings(ctx context.Context, id int64, keys []string, author *int64, details any) error {
+	return s.Write(ctx, func(tx *sql.Tx) error {
+		for _, k := range keys {
+			if _, err := tx.ExecContext(ctx, `UPDATE games SET pairing_id = NULL, pairing_a_side = NULL
+				WHERE pairing_id = (SELECT id FROM tournament_pairings WHERE tournament_id = ? AND key = ?)`, id, k); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM tournament_pairings WHERE tournament_id = ? AND key = ?`, id, k); err != nil {
+				return err
+			}
+		}
+		return addTournamentEvent(ctx, tx, id, time.Now(), author, "rebuilt", details)
+	})
 }

@@ -218,8 +218,13 @@ func (s *Service) SetupOf(set Settings, ps []store.TournamentParticipant) (tourn
 }
 
 // PairingGames returns the stored results of a tournament's pairings, with their games.
+// A finished tournament's are the ones it was frozen with.
 func (s *Service) PairingGames(ctx context.Context, id int64) (map[string]store.PairingResult, error) {
-	return s.opts.Store.TournamentResults(ctx, id)
+	t, _, err := s.opts.Store.Tournament(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.results(ctx, t)
 }
 
 // LastPairing is the pairing of the running tournament that ended last ("" = none).
@@ -236,6 +241,9 @@ type PlayerResult struct {
 	State   string `json:"state"`
 	EndedAt *int64 `json:"ended_at"`
 	Place   int    `json:"place"`
+	// Replaced: somebody took the player's place; Dropped: their team dropped out (spec 09 §10).
+	Replaced bool `json:"replaced,omitempty"`
+	Dropped  bool `json:"dropped,omitempty"`
 }
 
 // PlayerResults lists the tournaments a player took part in (spec 09 §12: profile).
@@ -246,7 +254,7 @@ func (s *Service) PlayerResults(ctx context.Context, playerID int64) ([]PlayerRe
 	}
 	out := make([]PlayerResult, 0, len(ts))
 	for _, t := range ts {
-		r := PlayerResult{ID: t.ID, Name: t.Name, State: t.State}
+		r := PlayerResult{ID: t.ID, Name: t.Name, State: t.State, Replaced: t.Replaced, Dropped: t.Dropped}
 		if t.EndedAt != nil {
 			r.EndedAt = store.Ptr(t.EndedAt.UnixMilli())
 		}

@@ -30,6 +30,7 @@ type Row struct {
 	GoalsFor     int
 	GoalsAgainst int
 	Buchholz     int
+	Dropped      bool // dropped out: ranked last, doesn't qualify
 	opponents    []int64
 	h2h          int // within a tie
 }
@@ -44,7 +45,7 @@ func (r Row) PerGame() float64 {
 
 // rank ranks the competitors of some pairings. byPlayer ranks the players of each side
 // separately (Monster DYP); perGame ranks by points per pairing played.
-func rank(entrants []*Entrant, pairings []*Pairing, byPlayer, perGame bool, tbs []TieBreak) []Row {
+func rank(entrants []*Entrant, pairings []*Pairing, byPlayer, perGame bool, tbs []TieBreak, stage int) []Row {
 	rows := map[int64]*Row{}
 	var order []int64
 	for i, e := range entrants {
@@ -157,11 +158,18 @@ func rank(entrants []*Entrant, pairings []*Pairing, byPlayer, perGame bool, tbs 
 		}
 		i = j
 	}
-	out := make([]Row, len(list))
-	for i, r := range list {
-		out[i] = *r
+	// Who dropped out of this stage (or before) is ranked last (spec 09 §10).
+	out := make([]Row, 0, len(list))
+	var dropped []Row
+	for _, r := range list {
+		if r.Entrant.Dropped(stage) {
+			r.Dropped = true
+			dropped = append(dropped, *r)
+			continue
+		}
+		out = append(out, *r)
 	}
-	return out
+	return append(out, dropped...)
 }
 
 func before(a, b *Row, tbs []TieBreak) bool {
@@ -216,5 +224,5 @@ func (s *State) Standings(stage int, group string) []Row {
 			ps = append(ps, p)
 		}
 	}
-	return rank(s.stageEntrants(stage, group), ps, f == MonsterDYP, f == Groups, s.Setup.TieBreaks)
+	return rank(s.stageEntrants(stage, group), ps, f == MonsterDYP, f == Groups, s.Setup.TieBreaks, stage)
 }

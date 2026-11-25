@@ -24,9 +24,9 @@
 		</thead>
 		<tbody class="divide-y divide-stone-100">
 			{#each rows as r, i (r.id)}
-				<tr class={qualify && i < qualify ? 'bg-emerald-50/60' : ''}>
+				<tr class="{qualify && i < qualify && !r.dropped ? 'bg-emerald-50/60' : ''} {r.dropped ? 'text-stone-400' : ''}">
 					<td class="py-1.5 text-right font-semibold tabular-nums">{i + 1}</td>
-					<td class="min-w-28 px-2 py-1.5"><Team entrant={{ team: byPlayer ? 0 : r.id, players: byPlayer ? [r.id] : r.players }} size={20} /></td>
+					<td class="min-w-28 px-2 py-1.5"><Team entrant={{ team: byPlayer ? 0 : r.id, players: byPlayer ? [r.id] : r.players, dropped: r.dropped }} size={20} /></td>
 					<td class="px-1 text-right tabular-nums">{r.played}</td>
 					<td class="px-1 text-right tabular-nums">{r.won}</td>
 					<td class="px-1 text-right tabular-nums">{r.lost}</td>

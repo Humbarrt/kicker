@@ -1,7 +1,7 @@
 # Spec 04: Repository layout, tooling + milestones
 
 Status: **Approved v6** (2026-11-23: software-first build order, §7). Turns specs 00–03 into a codebase and a build order.
-Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6 in progress: tasks 1–5 ✓, next task 6.
+Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6 in progress: tasks 1–6 ✓, next task 7.
 
 ## 1. One monorepo
 Everything lives in one **private** git repository on the owner's GitHub (`Humbarrt/kicker`), so the protocol, the server, the Arduino library and the UI always change together, and one version tag produces one release (D15). The old attempts live in a separate `kicker_old` folder and are not part of the repo.
@@ -221,7 +221,7 @@ The milestone numbers are names, not positions: they stay the same so references
 3. ✓ Table integration: engine tournament mode (coins check in, only a staged pairing kicks off, the game carries its pairing), the `tournaments` service (start with DYP draw and seeding, check-ins and "Play" stage pairings in any order, best-of games with swapped sides and first ball to the loser, finish, pause/continue, pause on sleep, restore after a restart).
 4. ✓ API + permissions (`tournaments.*`, own = the creator), SSE topic `tournament` (routes in spec 09 §13).
 5. ✓ Web: setup page with the format list, tournament page (bracket, groups, standings, ready pairings), scoreboard tournament mode, profile additions.
-6. Dropouts, replacements, manual results, rebuild; recompute placements of a finished tournament after a game edit.
+6. ✓ Changing a running tournament (spec 09 §10–11): replacing players, dropouts in every format (walkovers, annulled or forfeits, not drawn any more; a property test drops and replaces at random in every format), rename and rules of later stages, conflicts after edits and the rebuild, finished tournaments frozen and reopened by a void. No manual results: the table stands on its own.
 7. Load: a 64-team double knockout and a 40-player Monster DYP through `--sim`; e2e test of a small tournament.
 
 ### M7: Operations

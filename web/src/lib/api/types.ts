@@ -505,6 +505,10 @@ export interface TEntrant {
 	team: number;
 	players: number[];
 	bye?: boolean;
+	/** Monster DYP: the players' places (from 1). */
+	slots?: number[];
+	/** Dropped out (spec 09 §10). */
+	dropped?: boolean;
 }
 
 export interface TPairing {
@@ -540,6 +544,7 @@ export interface TStanding {
 	goals_for: number;
 	goals_against: number;
 	buchholz: number;
+	dropped?: boolean;
 }
 
 export interface TStage {
@@ -563,7 +568,7 @@ export interface TEstimate {
 
 export interface TournamentDetail extends TournamentSummary {
 	settings: TournamentSettings;
-	participants: { player_id: number; team: number | null; seed: number; dropped: boolean }[];
+	participants: { id: number; player_id: number; team: number | null; seed: number; dropped: boolean; replaced_by: number | null }[];
 	teams: TEntrant[];
 	stages: TStage[];
 	placements: { place: number; team: number; players: number[] }[];
@@ -574,8 +579,10 @@ export interface TournamentDetail extends TournamentSummary {
 	finished: boolean;
 	estimate: TEstimate | null;
 	events: { at: number; account_id: number | null; kind: string; details: Record<string, unknown> }[];
-	can: { edit: boolean; run: boolean; play: boolean; manage: boolean };
+	can: { edit: boolean; run: boolean; play: boolean; manage: boolean; change: boolean };
 	preview: boolean;
+	/** Pairings played by other teams than the bracket has now, after an edit (spec 09 §11). */
+	conflicts: string[];
 }
 
 export interface TournamentOption {
@@ -590,4 +597,6 @@ export interface PlayerTournamentResult {
 	state: TournamentState;
 	ended_at: number | null;
 	place: number;
+	replaced?: boolean;
+	dropped?: boolean;
 }

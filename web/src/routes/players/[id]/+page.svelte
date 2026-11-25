@@ -216,6 +216,8 @@
 							<a href="/tournaments/{x.id}" class="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-stone-50">
 								<span class="w-8 text-lg">{['', '🥇', '🥈', '🥉'][x.place] ?? ''}</span>
 								<span class="min-w-0 flex-1 truncate">{x.name}</span>
+								{#if x.replaced}<span class="chip bg-stone-100 text-stone-500">{t('tourn.replaced')}</span>
+								{:else if x.dropped}<span class="chip bg-stone-100 text-stone-500">{t('tourn.dropped')}</span>{/if}
 								<span class="muted">{x.state === 'finished' ? dateTime(x.ended_at, i18n.lang) : t(('tourn.state.' + x.state) as Key)}</span>
 							</a>
 						</li>

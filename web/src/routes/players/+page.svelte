@@ -29,7 +29,7 @@
 	});
 
 	// The leaderboard (M3 task 8): ranked players first, those with too few games below.
-	let key = $state<RatingKey>('team');
+	let key = $state<RatingKey>('solo'); // Solo first
 	let board = $state<Board | null>(null);
 	$effect(() => {
 		void live.statsRev;
@@ -47,7 +47,7 @@
 			<div class="mb-2 flex flex-wrap items-center gap-3">
 				<h1 class="h1 flex-1">{t('leaderboard.title')}</h1>
 				<div class="inline-flex rounded-lg bg-stone-100 p-0.5 text-sm" role="tablist">
-					{#each ['team', 'solo'] as const as k (k)}
+					{#each ['solo', 'team'] as const as k (k)}
 						<button role="tab" aria-selected={key === k} onclick={() => (key = k)}
 							class="rounded-md px-3 py-1 {key === k ? 'bg-white font-medium shadow-sm' : 'text-stone-600'}"
 							>{t(k === 'solo' ? 'rating.solo' : 'rating.team')}</button>
