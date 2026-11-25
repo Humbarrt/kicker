@@ -7,7 +7,7 @@ Wants=network-online.target
 User=kicker
 Group=kicker
 SupplementaryGroups=dialout
-ExecStart=/opt/kicker/kicker serve --addr :80 --data /var/lib/kicker
+ExecStart=/opt/kicker/kicker serve --addr :80 --tls-addr :443 --data /var/lib/kicker
 Restart=on-failure
 RestartSec=2
 # bind ports 80/443 without root (spec 04 §6)

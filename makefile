@@ -2,7 +2,10 @@
 #   make dev        Go server with virtual modules + Vite dev server (hot reload)
 #   make build      web + server for this machine          → bin/kicker
 #   make build-pi   web + server for the Raspberry Pi 4     → bin/kicker-linux-arm64
-#   make test       Go tests + web type check
+#   make generate   regenerate code (JSON Schemas in catalog/) – runs before dev, build and test
+#   make test       Go tests + web type check + firmware library tests (if PlatformIO is installed)
+#   make e2e        browser tests (Playwright) against `kicker serve --sim`
+#   make loadtest   100 000 games through the real server, checked against the spec 04 §4 budgets
 #   make firmware   build all module firmware (PlatformIO)
 #   make deploy PI=pi@kicker.local   copy the Pi build and restart the service
 
@@ -14,12 +17,15 @@ DIST    := server/internal/webui/dist
 PI      ?= pi@kicker.local
 MODULES := $(wildcard firmware/modules/*)
 
-.PHONY: help dev web build build-pi test lint tidy firmware deploy clean
+.PHONY: help generate dev web build build-pi test e2e loadtest firmware-test lint tidy firmware deploy clean
 
 help:
-	@sed -n '2,8p' Makefile
+	@sed -n '2,11p' Makefile
 
-dev:
+generate:
+	cd server && go generate ./...
+
+dev: generate
 	@trap 'kill 0' INT TERM EXIT; \
 	(cd server && go run ./cmd/kicker serve --sim --dev --data ../data) & \
 	(cd web && pnpm install --frozen-lockfile --silent && pnpm dev) & \
@@ -30,15 +36,25 @@ web:
 	find $(DIST) -mindepth 1 ! -name .gitkeep -delete
 	cp -R web/build/. $(DIST)/
 
-build: web
+build: generate web
 	cd server && CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o ../bin/kicker ./cmd/kicker
 
-build-pi: web
+build-pi: generate web
 	cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o ../bin/kicker-linux-arm64 ./cmd/kicker
 
-test:
+test: generate
 	cd server && go test ./...
 	cd web && pnpm check
+	@command -v pio >/dev/null && $(MAKE) firmware-test || echo "PlatformIO not installed, firmware tests skipped"
+
+e2e: build
+	cd web && KICKER_BIN=../bin/kicker pnpm e2e
+
+loadtest: build
+	bin/kicker loadtest
+
+firmware-test:
+	pio test -d firmware/lib/KickerModule -e native
 
 lint:
 	cd server && go vet ./...

@@ -22,4 +22,4 @@ hostnamectl set-hostname kicker
 
 systemctl daemon-reload
 systemctl enable --now kicker
-echo "kicker is running: http://kicker.local"
+echo "kicker is running: https://kicker.local (first visit: http://kicker.local/trust)"

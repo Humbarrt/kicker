@@ -20,7 +20,9 @@ export default defineConfig({
 	server: {
 		// `make dev`: the Go server runs on :8080 with --sim, Vite proxies API and SSE calls to it.
 		proxy: {
-			'/api': 'http://localhost:8080'
+			// changeOrigin must stay false: the server refuses cookie requests whose Origin doesn't
+			// match the Host (CSRF, spec 03 §13). The string shorthand would rewrite Host to :8080.
+			'/api': { target: 'http://localhost:8080', changeOrigin: false }
 		}
 	}
 });

@@ -16,3 +16,7 @@ server/internal/webui/dist/*
 *.key
 *.passphrase
 .env
+
+# Playwright
+web/test-results/
+web/playwright-report/

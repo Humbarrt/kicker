@@ -1,7 +1,10 @@
 // Package engine is the pure game engine (spec 02). It must not import store, api or modules.
 package engine
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // TimeTie decides what happens when the time limit runs out with a tied score (D10).
 type TimeTie string
@@ -50,4 +53,21 @@ func (r Rules) Winner(home, away int) Side {
 	default:
 		return ""
 	}
+}
+
+// Validate checks the rules against the limits of the games table.
+func (r Rules) Validate() error {
+	switch {
+	case r.WinScore < 1 || r.WinScore > 99:
+		return fmt.Errorf("%w: win score must be 1–99", ErrInvalidRules)
+	case r.WinBy < 1 || r.WinBy > 10:
+		return fmt.Errorf("%w: win by must be 1–10", ErrInvalidRules)
+	case r.MaxScore != 0 && (r.MaxScore < r.WinScore || r.MaxScore > 99):
+		return fmt.Errorf("%w: max score must be empty or between win score and 99", ErrInvalidRules)
+	case r.TimeLimit < 0 || r.TimeLimit > 24*time.Hour || r.TimeLimit%time.Second != 0:
+		return fmt.Errorf("%w: time limit must be whole seconds, at most 24 h", ErrInvalidRules)
+	case r.TimeTie != TimeTieGoldenGoal && r.TimeTie != TimeTieDraw:
+		return fmt.Errorf("%w: time tie must be golden_goal or draw", ErrInvalidRules)
+	}
+	return nil
 }
