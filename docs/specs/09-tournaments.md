@@ -153,13 +153,13 @@ Every team plays every other team once (twice: setting). Rounds by the circle me
 ## 13. Data model and code
 - Package `tournament/`: **pure functions**, like `engine/` – `Plan(setup) → stages and pairings`, `Advance(state, result) → new pairings`, `Standings(state)`, the duration estimate. No I/O; tested with scenario files like the engine (`tournament/testdata/*.txt`).
 - The **state is derived** from the setup and the pairing results, so an edit or a rebuild just recomputes it.
-- Tables:
-  - `tournaments` (id, name, owner_account_id, state, settings JSON, created_at, started_at, ended_at)
-  - `tournament_participants` (tournament_id, player_id, team_no NULL, seed, dropped_at)
-  - `tournament_stages` (tournament_id, no, format, settings JSON incl. rules + games per pairing)
-  - `tournament_pairings` (id, tournament_id, stage_no, round, position, team_a, team_b, state, result, winner)
-  - `games.pairing_id` (already in the projections, spec 04 M3)
-  - `tournament_events` (id, tournament_id, at, account_id, kind, details JSON): created, started, paused, resumed, player replaced, dropout, rebuilt, finished, abandoned.
+- Tables (migration 0011):
+  - `tournaments` (id, name, owner_account_id, state, settings JSON – the stages with their rules and games per pairing, tie-breaks, the draw seed –, created_at, started_at, ended_at)
+  - `tournament_participants` (id, tournament_id, player_id, team_no NULL, seed, dropped_at) – the guest may take part several times
+  - `tournament_pairings` (id, tournament_id, key, walkover NULL): a row only once a pairing is played or decided by walkover; the rest of the bracket is derived
+  - `games.pairing_id` → that row, and `games.pairing_a_side` (home/away): where team A played, since sides swap every game
+  - `tournament_events` (id, tournament_id, at, account_id, kind, details JSON): created, edited, started, paused, resumed, finished, abandoned, reinstated, player_replaced, dropout, walkover, manual_result, rebuilt.
+- A pairing's result = its walkover, or its finished games that aren't voided, in the order they ended.
 - The table actor gets the "current pairing" from the tournament service and starts its games with the stage's rules and the registered teams (spec 02 §6: "the rules … from the tournament stage").
 - SSE topic `tournament` (state changes, results).
 

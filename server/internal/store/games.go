@@ -34,7 +34,8 @@ type Game struct {
 	PresetID     *int64
 	Rules        Rules
 	PairingID    *int64
-	State        string // active | paused | finished | abandoned
+	PairingASide *string // home | away: the side team A of the pairing played (tournaments)
+	State        string  // active | paused | finished | abandoned
 	StartedAt    time.Time
 	EndedAt      *time.Time
 	NextBallSide *string
@@ -141,15 +142,16 @@ func (s *Store) PresetByLabel(ctx context.Context, label string) (Preset, error)
 
 // --- games ------------------------------------------------------------------------------------
 
-const gameCols = `id, preset_id, win_score, win_by, max_score, time_limit_s, time_tie, pairing_id, state, started_at, ended_at, next_ball_side, home_goals, away_goals, winner, voided, edits`
+const gameCols = `id, preset_id, win_score, win_by, max_score, time_limit_s, time_tie, pairing_id, state, started_at, ended_at, next_ball_side, home_goals, away_goals, winner, voided, edits, pairing_a_side`
 
 func scanGame(sc interface{ Scan(...any) error }) (Game, error) {
 	var g Game
 	var presetID, maxScore, timeLimit, pairingID, endedAt sql.NullInt64
 	var startedAt int64
-	var nextBall, winner sql.NullString
+	var nextBall, winner, aSide sql.NullString
 	err := sc.Scan(&g.ID, &presetID, &g.Rules.WinScore, &g.Rules.WinBy, &maxScore, &timeLimit, &g.Rules.TimeTie,
-		&pairingID, &g.State, &startedAt, &endedAt, &nextBall, &g.HomeGoals, &g.AwayGoals, &winner, &g.Voided, &g.Edits)
+		&pairingID, &g.State, &startedAt, &endedAt, &nextBall, &g.HomeGoals, &g.AwayGoals, &winner, &g.Voided, &g.Edits, &aSide)
+	g.PairingASide = strPtr(aSide)
 	g.Winner = strPtr(winner)
 	g.PresetID, g.PairingID = int64Ptr(presetID), int64Ptr(pairingID)
 	g.Rules.MaxScore, g.Rules.TimeLimitS = intPtr(maxScore), intPtr(timeLimit)
@@ -175,10 +177,10 @@ func (s *Store) CreateGame(ctx context.Context, g Game, events []Event) (int64, 
 
 func createGameTx(ctx context.Context, tx *sql.Tx, g Game, events []Event) (int64, error) {
 	res, err := tx.ExecContext(ctx, `INSERT INTO games (preset_id, win_score, win_by, max_score, time_limit_s, time_tie,
-		pairing_id, state, started_at, ended_at, next_ball_side, home_goals, away_goals, winner)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		pairing_id, pairing_a_side, state, started_at, ended_at, next_ball_side, home_goals, away_goals, winner)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		g.PresetID, g.Rules.WinScore, g.Rules.WinBy, g.Rules.MaxScore, g.Rules.TimeLimitS, g.Rules.TimeTie,
-		g.PairingID, g.State, g.StartedAt.UnixMilli(), msPtr(g.EndedAt), g.NextBallSide, g.HomeGoals, g.AwayGoals, g.Winner)
+		g.PairingID, g.PairingASide, g.State, g.StartedAt.UnixMilli(), msPtr(g.EndedAt), g.NextBallSide, g.HomeGoals, g.AwayGoals, g.Winner)
 	if err != nil {
 		return 0, err
 	}

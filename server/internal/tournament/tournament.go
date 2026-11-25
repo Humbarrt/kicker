@@ -33,15 +33,15 @@ const (
 
 // Stage is one format applied to the teams that reach it.
 type Stage struct {
-	Format     Format
-	BestOf     int     // games per pairing: 1 (default), 3, 5
-	Rounds     int     // Swiss and Monster DYP; 0 = the default
-	Double     bool    // round robin / groups: everyone meets twice
-	ThirdPlace bool    // knockout: a 3rd place game instead of a shared 3rd
-	Groups     int     // groups: how many
-	Advance    int     // how many reach the next stage: per group (groups), in total (round robin, Swiss)
-	FillThirds bool    // groups: fill the next bracket up to a power of 2 with the best third-placed (… next placed) teams
-	Seeding    Seeding // groups → next stage
+	Format     Format  `json:"format"`
+	BestOf     int     `json:"best_of,omitempty"`     // games per pairing: 1 (default), 3, 5
+	Rounds     int     `json:"rounds,omitempty"`      // Swiss and Monster DYP; 0 = the default
+	Double     bool    `json:"double,omitempty"`      // round robin / groups: everyone meets twice
+	ThirdPlace bool    `json:"third_place,omitempty"` // knockout: a 3rd place game instead of a shared 3rd
+	Groups     int     `json:"groups,omitempty"`      // groups: how many
+	Advance    int     `json:"advance,omitempty"`     // how many reach the next stage: per group (groups), in total (round robin, Swiss)
+	FillThirds bool    `json:"fill_thirds,omitempty"` // groups: fill the next bracket up to a power of 2 with the best of the next place
+	Seeding    Seeding `json:"seeding,omitempty"`     // groups → next stage
 }
 
 // Team is a fixed team (1 or 2 players).
