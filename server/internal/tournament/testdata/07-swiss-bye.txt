@@ -1,0 +1,18 @@
+# 5 teams, 3 rounds: the bye goes to the lowest-ranked team without one and counts as a win.
+teams 5
+stage swiss rounds=3
+expect ready 1-3 2-4               # top half against bottom half; 5 has the bye
+play 1-3 1
+play 2-4 2
+expect state s1-r-1-bye bye
+# Round 2: 1, 2, 5 have a point; 4 is the lowest without a bye and gets it.
+expect ready 1-2 3-5
+play 1-2 1
+play 3-5 5
+# Round 3: 4 had the bye in round 2, so 3 gets it now. 2-4 would be a rematch: 1-4 and 2-5.
+expect ready 1-4 2-5
+play 1-4 1
+play 2-5 5
+expect finished
+# 1 and 5 have 3 points; they never met, 1 has the better game difference (5's bye has no games).
+expect placements 1:1 2:5 3:2

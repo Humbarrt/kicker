@@ -1,7 +1,7 @@
 # Spec 04: Repository layout, tooling + milestones
 
 Status: **Approved v6** (2026-11-23: software-first build order, §7). Turns specs 00–03 into a codebase and a build order.
-Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi.
+Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6 in progress: task 1 ✓, next task 2.
 
 ## 1. One monorepo
 Everything lives in one **private** git repository on the owner's GitHub (`Humbarrt/kicker`), so the protocol, the server, the Arduino library and the UI always change together, and one version tag produces one release (D15). The old attempts live in a separate `kicker_old` folder and are not part of the repo.
@@ -212,7 +212,17 @@ The milestone numbers are names, not positions: they stay the same so references
 - Dispenser mechanism + firmware (release, release_all, exit sensor).
 - Engine: first-ball and after-goal rules, ball tracking and "give me my ball back" (spec 02 §6.1).
 
-### M6: Tournaments (D11)
+### M6: Tournaments (D11, spec 09)
+**Done when** (in `kicker serve --sim`): a tournament in every format can be set up from the duration-sorted options, played on the table – pairings start on check-in or "Play", in any order – paused and continued, and ends with placements; brackets and standings update live.
+
+**Tasks** (spec 09 §14):
+1. ✓ `tournament/` core: the six formats (round robin, groups → next stage crossed or re-seeded with optional best thirds, knockout with byes and 3rd place game or shared 3rd, double knockout with bracket reset, Swiss with byes and no rematches, Monster DYP with sit-out rotation), seeding, best of n, walkovers, ready pairings in any order + the suggestion, standings with the tie-breaks, placements, the duration estimate and the format options. Derived from setup + results; a property test plays every format to the end for 2–33 teams in random order, plus scenario files.
+2. Store: tables, events; `games.pairing_id` wiring.
+3. Table integration: tournament mode, check-ins, results back, pause/sleep/continue.
+4. API + permissions (`tournaments.*`), SSE.
+5. Web: setup page with the format list, tournament page (bracket, groups, standings, ready pairings), scoreboard tournament mode, profile additions.
+6. Dropouts, replacements, manual results, rebuild.
+7. Load: a 64-team double knockout and a 40-player Monster DYP through `--sim`; e2e test of a small tournament.
 
 ### M7: Operations
 - Full onboarding wizard, encrypted backups + emergency kit, automatic backup before migrations, signed updates with rollback, firmware updates over USB, SD card image.

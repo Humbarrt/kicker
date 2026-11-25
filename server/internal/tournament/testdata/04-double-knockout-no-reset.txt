@@ -1,0 +1,14 @@
+# The winners-bracket team wins the grand final: no bracket reset. A walkover counts like a win.
+teams 3
+stage double_knockout
+expect ready 2-3                   # seed 1 has a bye
+play 2-3 2
+expect ready 1-2
+walkover 1-2 1
+expect ready 2-3                   # the losers bracket: 3 lost once, 2 lost once
+play 2-3 3
+expect ready 1-3
+play 1-3 1
+expect state s1-GF-2-1 skipped
+expect finished
+expect placements 1:1 2:3 3:2

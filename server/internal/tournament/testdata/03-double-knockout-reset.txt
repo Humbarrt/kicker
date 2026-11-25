@@ -1,0 +1,17 @@
+# 4 teams. The losers-bracket team wins the grand final: a second, deciding game (bracket reset).
+teams 4
+stage double_knockout
+play 1-4 1
+play 2-3 3
+expect ready 1-3 2-4               # winners final and losers round 1, in any order
+play 2-4 2
+play 1-3 1
+expect ready 2-3                   # losers final: the loser of the winners final drops in
+play 2-3 3
+expect ready 1-3                   # grand final
+play 1-3 3
+expect state s1-GF-2-1 ready
+expect running
+play 1-3 1
+expect finished
+expect placements 1:1 2:3 3:2
