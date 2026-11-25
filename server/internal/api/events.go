@@ -10,6 +10,7 @@ import (
 
 	"github.com/Humbarrt/kicker/server/internal/auth"
 	"github.com/Humbarrt/kicker/server/internal/table"
+	"github.com/Humbarrt/kicker/server/internal/tournaments"
 )
 
 // Bus topics besides table.TopicTable.
@@ -40,6 +41,9 @@ func (o Options) eventsRoute(api *gin.RouterGroup) {
 	}
 	api.GET("/events", o.Require(auth.ViewLive), func(c *gin.Context) {
 		topics := []string{table.TopicTable, TopicStats}
+		if o.perms(c).Has(auth.ViewTournaments) {
+			topics = append(topics, tournaments.TopicTournament)
+		}
 		if account(c).IsAdmin() && !account(c).MustChangePassword {
 			topics = append(topics, TopicModules, TopicConsole, TopicAccounts)
 		}

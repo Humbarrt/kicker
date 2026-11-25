@@ -245,7 +245,7 @@ func serve(args []string) error {
 
 	router := api.NewRouter(api.Options{
 		Sim: *sim, ServerID: serverID, Name: name, DataDir: *dataDir, CA: caOpt, Auth: authSvc, Onboarding: ob,
-		Modules: host, Simulator: simulator, Table: tbl, Players: playerSvc, Coins: coinSvc, Ratings: st, History: st, Stats: stats.Reader{St: st, Cache: statsCache}, Presets: st, Bus: events, Done: ctx.Done(),
+		Modules: host, Simulator: simulator, Table: tbl, Players: playerSvc, Coins: coinSvc, Ratings: st, History: st, Stats: stats.Reader{St: st, Cache: statsCache}, Presets: st, Tournaments: tourneys, Bus: events, Done: ctx.Done(),
 	})
 	srv := &http.Server{Addr: *addr, Handler: router, ReadHeaderTimeout: 10 * time.Second}
 	var tlsSrv *http.Server

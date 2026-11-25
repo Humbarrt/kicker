@@ -14,6 +14,7 @@ import (
 	"github.com/Humbarrt/kicker/server/internal/coins"
 	"github.com/Humbarrt/kicker/server/internal/onboarding"
 	"github.com/Humbarrt/kicker/server/internal/players"
+	"github.com/Humbarrt/kicker/server/internal/tournaments"
 	"github.com/Humbarrt/kicker/server/internal/version"
 	"github.com/Humbarrt/kicker/server/internal/webui"
 )
@@ -46,12 +47,14 @@ type Options struct {
 	Simulator Simulator  // nil = no simulator routes (only with --sim)
 	Players   *players.Service
 	Coins     *coins.Service
-	Ratings   Ratings  // nil = no rating routes
-	History   History  // nil = no history routes
-	Stats     Stats    // nil = no stats routes
-	Table     Table    // nil = no table routes
-	Presets   Presets  // nil = no preset routes
-	Bus       *bus.Bus // nil = no SSE stream
+	Ratings   Ratings // nil = no rating routes
+	History   History // nil = no history routes
+	Stats     Stats   // nil = no stats routes
+	Table     Table   // nil = no table routes
+	Presets   Presets // nil = no preset routes
+	// Tournaments runs tournaments (spec 09); nil = no tournament routes.
+	Tournaments *tournaments.Service
+	Bus         *bus.Bus // nil = no SSE stream
 	// Done ends long-lived responses (SSE) when the server shuts down.
 	Done      <-chan struct{}
 	Heartbeat time.Duration // SSE keep-alive comment interval; default 15 s
@@ -124,6 +127,9 @@ func NewRouter(opts Options) *gin.Engine {
 	}
 	if opts.Ratings != nil {
 		opts.ratingRoutes(api)
+	}
+	if opts.Tournaments != nil {
+		opts.tournamentRoutes(api)
 	}
 	if opts.Bus != nil {
 		opts.eventsRoute(api)

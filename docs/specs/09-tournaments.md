@@ -164,6 +164,19 @@ Every team plays every other team once (twice: setting). Rounds by the circle me
 - The engine's game carries its pairing (`Game.Pairing`: row id + where team A plays), saved with the game.
 - SSE topic `tournament` (state changes, results).
 
+### API (M6 task 4)
+| Route | Permission |
+|---|---|
+| `GET /api/tournaments` – the list (running and paused first) | `view.tournaments` |
+| `GET /api/tournaments/:id` – the page: settings, participants, teams, stages with pairings and their games, groups, standings, placements, ready pairings in the order of play, the suggestion, the pairing on the table, check-ins, estimate, history, what the account may do. In setup, fixed teams get a preview of the bracket | `view.tournaments` |
+| `GET /api/tournaments/options?teams=n[&monster=1]` – the formats with their estimates, sorted by duration (this table's pace once it has 10 games) | `tournaments.create` |
+| `POST /api/tournaments`, `PUT /api/tournaments/:id` (setup only) – name, settings, participants | `tournaments.create` / `tournaments.edit` (own/all) |
+| `POST …/:id/start`, `…/pause`, `…/continue` | `tournaments.run` (own/all) |
+| `POST …/:id/play {pairing}` | `table.control` |
+| `POST …/:id/abandon`, `…/reinstate`, `DELETE …/:id` (only without games) | `tournaments.manage` |
+
+"Own" = the account created the tournament. SSE topic `tournament` (`{id}`) on every change, for accounts with `view.tournaments`. During a tournament, free-play table actions answer `409 tournament`.
+
 ## 14. Milestone tasks (M6, proposed order)
 1. `tournament/` core: formats, seeding, byes, pairing order, standings + tie-breaks, duration estimate (+ scenarios).
 2. Store: tables, events; `games.pairing_id` wiring.

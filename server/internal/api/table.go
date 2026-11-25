@@ -74,6 +74,8 @@ func engineError(c *gin.Context, err error) {
 		fail(c, http.StatusConflict, "not_paused", err.Error())
 	case errors.Is(err, table.ErrNoSuchGame):
 		fail(c, http.StatusNotFound, "not_found", err.Error())
+	case errors.Is(err, engine.ErrTournament):
+		fail(c, http.StatusConflict, "tournament", err.Error())
 	case errors.Is(err, engine.ErrInvalidInput):
 		fail(c, http.StatusBadRequest, "invalid_input", err.Error())
 	case errors.Is(err, table.ErrNotRunning), errors.Is(err, context.DeadlineExceeded):

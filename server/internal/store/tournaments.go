@@ -457,3 +457,19 @@ func (s *Store) TournamentPausedGame(ctx context.Context, tournamentID int64) (i
 	}
 	return id, err == nil, err
 }
+
+// GamePace measures this table's games for the tournament duration estimate (spec 09 §4): play
+// seconds per goal and the loser's goals per winner goal, over the last 200 finished games that
+// count and lasted under 30 minutes (longer ones were paused). n is how many games it used.
+func (s *Store) GamePace(ctx context.Context) (secondsPerGoal, loserShare float64, n int, err error) {
+	var ms, goals, winner, loser sql.NullFloat64
+	err = s.r.QueryRowContext(ctx, `SELECT COUNT(*), SUM(ended_at - started_at), SUM(home_goals + away_goals),
+			SUM(max(home_goals, away_goals)), SUM(min(home_goals, away_goals))
+		FROM (SELECT * FROM games INDEXED BY games_finished_order
+			WHERE state = 'finished' AND NOT voided AND winner IS NOT NULL AND ended_at - started_at < 1800000
+			ORDER BY ended_at DESC, id DESC LIMIT 200)`).Scan(&n, &ms, &goals, &winner, &loser)
+	if err != nil || n == 0 || goals.Float64 == 0 || winner.Float64 == 0 {
+		return 0, 0, n, err
+	}
+	return ms.Float64 / 1000 / goals.Float64, loser.Float64 / winner.Float64, n, nil
+}
