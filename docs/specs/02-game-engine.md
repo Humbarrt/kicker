@@ -85,7 +85,7 @@ The guest player is exempt from rules 1 and 2: several guests can play at once.
 - Coin mappings are resolved when the registration is made. Moving a coin to another player later never changes past games.
 
 ## 5. Corner claim flow (phones)
-1. The phone reads the corner's NFC tag: `kicker://claim?s=<server_id>&c=home_1` (spec 03 §11).
+1. The phone reads the corner's NFC tag: `https://112233444.xyz/c?s=<server_id>&c=home_1` (spec 03 §11, spec 08); the app opens through the link, or the browser forwards to the kicker's `/claim` page.
 2. The app picks the account stored for that `server_id` and calls `POST /api/table/claims {corner}`. The player is the account's linked player, so **using a phone requires a member account**. Players without an account use coins.
 3. The claim registers the player on that corner's side (rules in §4), source `corner`, and **wakes the table**.
 4. If `present` arrives at that corner within `corner_claim_timeout_s` (30 s), the phone is tracked: `absent` later makes the registration stale.
