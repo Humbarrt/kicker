@@ -32,8 +32,13 @@ type Options struct {
 	OnEffect func(engine.Effect)
 	// OnGameFinished is called after a finished game is saved (ratings, stats). It must not block.
 	OnGameFinished func(gameID int64)
-	Logger         *slog.Logger
-	Now            func() time.Time // for tests; default time.Now
+	// OnCheckIn is called for each tournament player who inserted their coin (spec 09 §8), and
+	// OnPhase when the table's phase changes (the tournament pauses when the table goes to sleep).
+	// Both run on the table's goroutine: they must not block or call back into the table.
+	OnCheckIn func(engine.CheckIn)
+	OnPhase   func(from, to engine.Phase)
+	Logger    *slog.Logger
+	Now       func() time.Time // for tests; default time.Now
 }
 
 // Table is the running table. Create with New, then Run.
@@ -303,6 +308,7 @@ func (t *Table) CurrentPreset(ctx context.Context) (store.Preset, error) {
 
 func (t *Table) apply(ctx context.Context, in engine.Input) error {
 	now := t.opts.Now()
+	prevPhase := t.state.Phase
 	next, res, err := engine.Step(t.state, in, now)
 	if err != nil {
 		return err
@@ -327,6 +333,14 @@ func (t *Table) apply(ctx context.Context, in engine.Input) error {
 		if t.opts.OnEffect != nil {
 			t.opts.OnEffect(e)
 		}
+	}
+	if t.opts.OnCheckIn != nil {
+		for _, c := range res.CheckIns {
+			t.opts.OnCheckIn(c)
+		}
+	}
+	if from := prevPhase; t.opts.OnPhase != nil && from != t.state.Phase {
+		t.opts.OnPhase(from, t.state.Phase)
 	}
 	if res.Changed {
 		t.publish(now)

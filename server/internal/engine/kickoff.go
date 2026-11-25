@@ -123,6 +123,13 @@ func (s *State) updateKickoff(now time.Time, rosterChanged bool, r *Result) {
 	if s.NextOnce != nil {
 		next = *s.NextOnce
 	}
+	if s.Tournament { // only a staged pairing kicks off (spec 09 §8)
+		if s.Staged == nil {
+			next = NextGame{}
+		} else {
+			next = NextGame{Rules: s.Staged.Rules, PresetID: s.Staged.PresetID}
+		}
+	}
 	ready := s.kickoffReady() && next.Rules.Validate() == nil
 	switch {
 	case ready && s.Phase == PhaseIdle:

@@ -38,6 +38,7 @@ import (
 	"github.com/Humbarrt/kicker/server/internal/store"
 	"github.com/Humbarrt/kicker/server/internal/table"
 	"github.com/Humbarrt/kicker/server/internal/tlsca"
+	"github.com/Humbarrt/kicker/server/internal/tournaments"
 	"github.com/Humbarrt/kicker/server/internal/version"
 )
 
@@ -156,13 +157,17 @@ func serve(args []string) error {
 	coinSvc := coins.New(coins.Options{Store: st, Auth: authSvc, OnChange: func(uid string, playerID int64) {
 		tbl.Feed(engine.CoinAssigned{UID: uid, PlayerID: playerID})
 	}})
+	var tourneys *tournaments.Service // the tournament on the table (spec 09 §8)
 	tbl = table.New(table.Options{
 		Store:  st,
 		Bus:    events,
 		Config: engine.DefaultConfig(), // the saved table settings (table_settings) override it
 		OnGameFinished: func(id int64) {
 			go projector.GameFinished(ctx, id)
+			tourneys.GameFinished(id)
 		},
+		OnCheckIn: func(c engine.CheckIn) { tourneys.CheckIn(c) },
+		OnPhase:   func(from, to engine.Phase) { tourneys.Phase(from, to) },
 		OnEffect: func(e engine.Effect) {
 			switch e := e.(type) {
 			case engine.EjectCoins:
@@ -184,7 +189,9 @@ func serve(args []string) error {
 		},
 	})
 	tableDone := make(chan error, 1)
+	tourneys = tournaments.New(tournaments.Options{Store: st, Table: tbl, Bus: events})
 	go func() { tableDone <- tbl.Run(ctx) }()
+	go tourneys.Run(ctx)
 
 	hostOpts := modules.Options{
 		Store: st.Adoptions(),

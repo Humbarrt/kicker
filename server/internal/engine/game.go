@@ -112,8 +112,9 @@ type Game struct {
 	Roster       Roster
 	PausedAt     time.Time // while paused or abandoned: when it was paused
 	PauseReason  string
-	Voided       bool // game_voided: the game stays but counts for nothing
-	Edits        int  // edits of the finished game in force (not reverted)
+	Voided       bool         // game_voided: the game stays but counts for nothing
+	Edits        int          // edits of the finished game in force (not reverted)
+	Pairing      *GamePairing // a tournament game: its pairing (spec 09)
 
 	played       time.Duration // play time before runningSince
 	runningSince time.Time     // zero = clock stopped
@@ -290,7 +291,7 @@ func (g *Game) clone() *Game {
 
 // Replay rebuilds a game from its header and its stored events.
 func Replay(header Game, events []Event) *Game {
-	g := &Game{ID: header.ID, PresetID: header.PresetID, Rules: header.Rules, NextBallSide: header.NextBallSide}
+	g := &Game{ID: header.ID, PresetID: header.PresetID, Rules: header.Rules, NextBallSide: header.NextBallSide, Pairing: header.Pairing}
 	reverted := Reverted(events)
 	for _, e := range events {
 		if reverted[e.Seq] || e.Type == EvReverted {

@@ -114,7 +114,7 @@ Every team plays every other team once (twice: setting). Rounds by the circle me
   - As soon as **one player of each team** of a ready pairing has checked in, that pairing goes on the table and the kickoff countdown runs (spec 02 §6). Usually that is the suggested pairing, but any ready pairing can start this way – out of order (§7.2).
   - If a team has several ready pairings (round robin), the pairing starts once the other team checks in too.
   - **"Play"** next to any ready pairing in the UI (`table.control`) puts it on the table at once, without check-ins.
-  - Check-ins are kept until they are used, until the player's coin is ejected, or until the table sleeps.
+  - Check-ins are kept until they are used or the table sleeps (coins are ejected at every game end anyway). Corner tags check in with M4.
   - The tournament decides sides and first ball (§7.3); the stage's rules apply.
 - A finished game of a best-of pairing is followed by the next game of the same pairing with the countdown – the players are already there.
 - The table going to sleep pauses the tournament (§3). On wake: "Continue tournament X?" – continue / not now.
@@ -160,7 +160,8 @@ Every team plays every other team once (twice: setting). Rounds by the circle me
   - `games.pairing_id` → that row, and `games.pairing_a_side` (home/away): where team A played, since sides swap every game
   - `tournament_events` (id, tournament_id, at, account_id, kind, details JSON): created, edited, started, paused, resumed, finished, abandoned, reinstated, player_replaced, dropout, walkover, manual_result, rebuilt.
 - A pairing's result = its walkover, or its finished games that aren't voided, in the order they ended.
-- The table actor gets the "current pairing" from the tournament service and starts its games with the stage's rules and the registered teams (spec 02 §6: "the rules … from the tournament stage").
+- Package `tournaments` (the service, I/O) runs the active tournament: it starts it (DYP draw, seeding by rating unless the setup's order is kept), turns the engine's **tournament mode** on (`engine.SetTournament`), collects check-ins (the engine reports a tournament player's coin instead of registering it), stages pairings (`engine.StagePairing`: players, the stage's rules – or the current preset with golden goal –, sides, first ball; then the normal kickoff countdown), stages the next game of a best-of by itself, finishes the tournament, and pauses it when the table sleeps during a tournament game. A running tournament is restored after a restart.
+- The engine's game carries its pairing (`Game.Pairing`: row id + where team A plays), saved with the game.
 - SSE topic `tournament` (state changes, results).
 
 ## 14. Milestone tasks (M6, proposed order)

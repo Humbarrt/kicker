@@ -425,3 +425,35 @@ func (s *Store) TournamentEvents(ctx context.Context, tournamentID int64) ([]Tou
 	}
 	return out, rows.Err()
 }
+
+// StartTournament moves a tournament from setup to running with its final settings (the draw
+// seed) and participants (teams drawn and seeded), in one transaction.
+func (s *Store) StartTournament(ctx context.Context, id int64, settings json.RawMessage, ps []TournamentParticipant, author *int64) error {
+	return s.Write(ctx, func(tx *sql.Tx) error {
+		now := time.Now()
+		res, err := tx.ExecContext(ctx, `UPDATE tournaments SET state = 'running', settings = ?, started_at = ?
+			WHERE id = ? AND state = 'setup'`, settingsText(settings), now.UnixMilli(), id)
+		if err != nil {
+			return err
+		}
+		if err := mustChangeOne(ctx, tx, res, id); err != nil {
+			return err
+		}
+		if err := setTournamentParticipants(ctx, tx, id, ps); err != nil {
+			return err
+		}
+		return addTournamentEvent(ctx, tx, id, now, author, "started", nil)
+	})
+}
+
+// TournamentPausedGame returns a paused game of a tournament (paused when the table went to
+// sleep, or switched off the table), if there is one.
+func (s *Store) TournamentPausedGame(ctx context.Context, tournamentID int64) (int64, bool, error) {
+	var id int64
+	err := s.r.QueryRowContext(ctx, `SELECT g.id FROM games g JOIN tournament_pairings p ON p.id = g.pairing_id
+		WHERE p.tournament_id = ? AND g.state = 'paused' ORDER BY g.id DESC LIMIT 1`, tournamentID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	return id, err == nil, err
+}

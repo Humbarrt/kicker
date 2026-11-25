@@ -44,6 +44,9 @@ func gameToStore(g engine.Game) store.Game {
 	}
 	out.HomeGoals, out.AwayGoals, out.Winner = g.Home, g.Away, strOrNil(g.Winner)
 	out.Voided, out.Edits = g.Voided, g.Edits
+	if g.Pairing != nil {
+		out.PairingID, out.PairingASide = store.Ptr(g.Pairing.ID), store.Ptr(string(g.Pairing.ASide))
+	}
 	out.Participants = participantsOf(g)
 	return out
 }
@@ -81,6 +84,13 @@ func headerFromStore(g store.Game) engine.Game {
 	}
 	if g.NextBallSide != nil {
 		out.NextBallSide = engine.Side(*g.NextBallSide)
+	}
+	if g.PairingID != nil {
+		p := engine.GamePairing{ID: *g.PairingID, ASide: engine.Home}
+		if g.PairingASide != nil {
+			p.ASide = engine.Side(*g.PairingASide)
+		}
+		out.Pairing = &p
 	}
 	return out
 }

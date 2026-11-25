@@ -97,6 +97,9 @@ type GameView struct {
 	Goals        []GoalView `json:"goals"`
 	// Roster per side ("home", "away"): who plays this game.
 	Roster map[string][]SeatView `json:"roster"`
+	// PairingID: a tournament game's pairing (spec 09); PairingASide: where team A plays.
+	PairingID    int64  `json:"pairing_id,omitempty"`
+	PairingASide string `json:"pairing_a_side,omitempty"`
 	// Voided: the game counts for nothing. Edits: corrections after the game in force.
 	Voided bool `json:"voided"`
 	Edits  int  `json:"edits"`
@@ -164,6 +167,7 @@ func gameView(g *engine.Game, current bool, now time.Time) *GameView {
 		Target: g.Rules.ScoreTarget(g.Home, g.Away), Winner: strOrNil(g.Winner), EndReason: g.EndReason,
 		StartedAt: g.StartedAt.UnixMilli(), PlayTimeMs: g.PlayTime(now).Milliseconds(), ClockRunning: g.ClockRunning(),
 		ClockExpired: g.ClockExpired, GoldenGoal: g.GoldenGoal, NextBall: strOrNil(g.NextBallSide),
+		PairingID: pairingID(g), PairingASide: pairingASide(g),
 		Goals: make([]GoalView, len(g.Goals)), Voided: g.Voided, Edits: g.Edits,
 	}
 	if g.PresetID != 0 {
@@ -197,4 +201,18 @@ func gameView(g *engine.Game, current bool, now time.Time) *GameView {
 func rulesView(rules engine.Rules) RulesView {
 	r := rulesToStore(rules)
 	return RulesView{WinScore: r.WinScore, WinBy: r.WinBy, MaxScore: r.MaxScore, TimeLimitS: r.TimeLimitS, TimeTie: r.TimeTie}
+}
+
+func pairingID(g *engine.Game) int64 {
+	if g.Pairing == nil {
+		return 0
+	}
+	return g.Pairing.ID
+}
+
+func pairingASide(g *engine.Game) string {
+	if g.Pairing == nil {
+		return ""
+	}
+	return string(g.Pairing.ASide)
 }

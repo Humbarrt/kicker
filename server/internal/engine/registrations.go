@@ -290,7 +290,7 @@ func (s *State) coins(in Input, now time.Time, r *Result) error {
 		if !slices.ContainsFunc(s.Acceptors[in.Side], func(c CoinRef) bool { return c.UID == in.UID }) {
 			s.Acceptors[in.Side] = append(s.Acceptors[in.Side], CoinRef{UID: in.UID, PlayerID: in.PlayerID})
 		}
-		s.coinIn(in.Side, CoinRef{UID: in.UID, PlayerID: in.PlayerID})
+		s.coinOrCheckIn(in.Side, CoinRef{UID: in.UID, PlayerID: in.PlayerID}, r)
 	case CoinsHeld:
 		if !in.Side.Valid() {
 			return fmt.Errorf("%w: coins on side %q", ErrInvalidInput, in.Side)
@@ -310,7 +310,7 @@ func (s *State) coins(in Input, now time.Time, r *Result) error {
 			}
 		}
 		for _, c := range in.Coins {
-			s.coinIn(in.Side, c)
+			s.coinOrCheckIn(in.Side, c, r)
 		}
 	case CoinsEjected:
 		if !in.Side.Valid() {
@@ -347,6 +347,15 @@ func (s *State) coins(in Input, now time.Time, r *Result) error {
 
 // coinIn registers the player of a coin that is inside an acceptor. A full side is not an error
 // for a module: the coin just doesn't count (the view shows it).
+// coinOrCheckIn registers a coin's player – or, in tournament mode, reports a check-in.
+func (s *State) coinOrCheckIn(side Side, c CoinRef, r *Result) {
+	if s.Tournament {
+		s.checkIn(side, c, r)
+		return
+	}
+	s.coinIn(side, c)
+}
+
 func (s *State) coinIn(side Side, c CoinRef) {
 	_ = s.register(side, c.PlayerID, c.UID, RegSource{Via: ViaCoin, Ref: c.UID})
 }

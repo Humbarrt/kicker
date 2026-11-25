@@ -81,6 +81,10 @@ type State struct {
 	// SmartWake: the table woke up with on_wake smart and Recent is waiting for its players – at
 	// least one per side (§9).
 	SmartWake bool
+	// Tournament: a tournament runs the table (spec 09 §8); Staged is the pairing waiting for
+	// its kickoff. Not persisted: the tournament service sets both again after a restart.
+	Tournament bool
+	Staged     *Staged
 
 	pending []Event // events of Game not yet handed to the caller
 	created bool    // Game was created in this step
@@ -194,6 +198,8 @@ type Result struct {
 	Changed bool // the visible state changed: publish it
 	// Registrations changed: save State.Regs (after the writes).
 	Registrations bool
+	// CheckIns are tournament players who inserted their coin (tournament mode).
+	CheckIns []CheckIn
 }
 
 // Errors for API commands. Sensor input is never an error; it is ignored if it doesn't apply.
@@ -237,6 +243,10 @@ func Step(s State, in Input, now time.Time) (State, Result, error) {
 		err = n.setConfig(in, now, &r)
 	case SetNextGame:
 		err = n.setNextGame(in, &r)
+	case SetTournament:
+		err = n.setTournament(in, now, &r)
+	case StagePairing:
+		err = n.stagePairing(in, now, &r)
 	case SensorGoal:
 		n.sensorGoal(in, now, &r)
 	case AdjustScore:
@@ -342,6 +352,15 @@ func (s *State) start(in StartGame, src Source, now time.Time, r *Result) error 
 	if in.FirstBall != "" && !in.FirstBall.Valid() {
 		return fmt.Errorf("%w: first ball side %q", ErrInvalidInput, in.FirstBall)
 	}
+	if s.Tournament {
+		if s.Phase == PhasePlaying {
+			return ErrTournament // a tournament game ends by playing it; pausing goes through the tournament
+		}
+		if s.Staged == nil {
+			return fmt.Errorf("%w: no pairing is on the table", ErrTournament)
+		}
+		in.Rules, in.PresetID, in.FirstBall = s.Staged.Rules, s.Staged.PresetID, s.Staged.FirstBall
+	}
 	if s.Phase == PhasePlaying {
 		// "Start new game" (§7.4): the running game is paused – or discarded without goals – and
 		// the table goes to the kickoff countdown with the current registrations.
@@ -379,6 +398,10 @@ func (s *State) start(in StartGame, src Source, now time.Time, r *Result) error 
 		r.Registrations = true
 	}
 	s.Game = &Game{PresetID: in.PresetID, Rules: in.Rules, NextBallSide: first}
+	if s.Tournament && s.Staged != nil {
+		p := s.Staged.Pairing
+		s.Game.Pairing, s.Staged = &p, nil
+	}
 	s.created = true
 	s.LastActivity = now // a fresh game doesn't pause right away
 	s.setPhase(PhasePlaying, now)

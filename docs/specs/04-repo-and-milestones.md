@@ -1,7 +1,7 @@
 # Spec 04: Repository layout, tooling + milestones
 
 Status: **Approved v6** (2026-11-23: software-first build order, §7). Turns specs 00–03 into a codebase and a build order.
-Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6 in progress: tasks 1–2 ✓, next task 3.
+Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6 in progress: tasks 1–3 ✓, next task 4.
 
 ## 1. One monorepo
 Everything lives in one **private** git repository on the owner's GitHub (`Humbarrt/kicker`), so the protocol, the server, the Arduino library and the UI always change together, and one version tag produces one release (D15). The old attempts live in a separate `kicker_old` folder and are not part of the repo.
@@ -218,7 +218,7 @@ The milestone numbers are names, not positions: they stay the same so references
 **Tasks** (spec 09 §14):
 1. ✓ `tournament/` core: the six formats (round robin, groups → next stage crossed or re-seeded with optional best thirds, knockout with byes and 3rd place game or shared 3rd, double knockout with bracket reset, Swiss with byes and no rematches, Monster DYP with sit-out rotation), seeding, best of n, walkovers, ready pairings in any order + the suggestion, standings with the tie-breaks, placements, the duration estimate and the format options. Derived from setup + results; a property test plays every format to the end for 2–33 teams in random order, plus scenario files.
 2. ✓ Store: migration 0011 (tournaments, participants, pairings once played, events; `games.pairing_a_side`), lifecycle moves with their events, walkovers, results per pairing (finished, non-voided games), delete only without games.
-3. Table integration: tournament mode, check-ins, results back, pause/sleep/continue.
+3. ✓ Table integration: engine tournament mode (coins check in, only a staged pairing kicks off, the game carries its pairing), the `tournaments` service (start with DYP draw and seeding, check-ins and "Play" stage pairings in any order, best-of games with swapped sides and first ball to the loser, finish, pause/continue, pause on sleep, restore after a restart).
 4. API + permissions (`tournaments.*`), SSE.
 5. Web: setup page with the format list, tournament page (bracket, groups, standings, ready pairings), scoreboard tournament mode, profile additions.
 6. Dropouts, replacements, manual results, rebuild.
