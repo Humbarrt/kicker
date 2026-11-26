@@ -80,8 +80,10 @@ jobs:
       - name: Firmware (every board of every module)
         run: |
           for m in firmware/modules/*/; do
-            echo "== $m"
-            pio run -d "$m"
+            # every [env:…], not only default_envs
+            envs=$(sed -n 's/^\[env:\([^]]*\)\].*/-e \1/p' "$m/platformio.ini")
+            echo "== $m: $envs"
+            pio run -d "$m" $envs
           done
 
       - name: release.json
