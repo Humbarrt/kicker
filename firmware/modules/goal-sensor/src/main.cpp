@@ -13,7 +13,8 @@
 #define BOARD_NAME "unknown"
 #endif
 
-KickerModule km("kicker/goal-sensor", "0.4.0", BOARD_NAME);
+// KM_MANIFEST and KM_VERSION come from platformio.ini ([kicker]).
+KickerModule km(KM_MANIFEST, KM_VERSION, BOARD_NAME);
 
 //             instance  pin  level while broken (Adafruit 2168: LOW)
 GoalGate goalA("a",      2,   LOW);

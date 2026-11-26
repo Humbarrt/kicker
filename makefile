@@ -37,7 +37,7 @@ web:
 	cp -R web/build/. $(DIST)/
 
 build: generate web
-	cd server && CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o ../bin/kicker ./cmd/kicker
+	cd server && go build -ldflags "$(LDFLAGS)" -o ../bin/kicker ./cmd/kicker
 
 build-pi: generate web
 	cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o ../bin/kicker-linux-arm64 ./cmd/kicker

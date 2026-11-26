@@ -62,6 +62,8 @@ func main() {
 		err = backupCmd(args)
 	case "restore":
 		err = restoreCmd(args)
+	case "release":
+		err = releaseCmd(args)
 	case "version":
 		fmt.Printf("kicker %s (%s), updates enabled: %v\n", version.Version, version.Commit, version.UpdatesEnabled())
 	case "-h", "--help", "help":
@@ -89,7 +91,7 @@ func main() {
 var reexec string
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: kicker <serve|monitor|admin|loadtest|backup|restore|version> [flags]\n       kicker admin <create|set-password|reset-code> [--data DIR] <username>")
+	fmt.Fprintln(os.Stderr, "usage: kicker <serve|monitor|admin|loadtest|backup|restore|release|version> [flags]\n       kicker admin <create|set-password|reset-code> [--data DIR] <username>")
 }
 
 func serve(args []string) error {

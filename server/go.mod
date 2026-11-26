@@ -3,6 +3,7 @@ module github.com/Humbarrt/kicker/server
 go 1.25.0
 
 require (
+	aead.dev/minisign v0.3.0
 	filippo.io/age v1.3.2
 	github.com/gin-gonic/gin v1.12.0
 	github.com/ncruces/go-sqlite3 v0.30.5

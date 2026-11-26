@@ -1,6 +1,6 @@
 # Spec 10: Operations (M7)
 
-Status: **Approved v1** (2026-11-25, decisions in §9). Progress: tasks 1–3 ✓. Builds on D14 (backups), D15 (updates), D18 + spec 03 §8 and §12 (emergency kit, onboarding), spec 01 §9 (module updates) and spec 04 §5–6 (releases, deployment).
+Status: **Approved v1** (2026-11-25, decisions in §9). Progress: tasks 1–4 ✓. Builds on D14 (backups), D15 (updates), D18 + spec 03 §8 and §12 (emergency kit, onboarding), spec 01 §9 (module updates) and spec 04 §5–6 (releases, deployment).
 
 ## 1. Scope
 - The full onboarding wizard (spec 03 §12, steps 1–9).
@@ -55,10 +55,13 @@ Not in scope: network shares built into the server (SMB/NFS clients), WebDAV/S3 
 
 ## 3. Server updates (D15)
 ### Releases
-- A tag `vX.Y.Z` builds the release (spec 04 §5) with **one signed file**: `release.json` + `release.json.minisig`.
-  - `release.json`: version, date, notes (markdown), minimum version to update from, assets: `{name, url, sha256, size}` for the server (`linux/arm64`) and every firmware file with its `mf`, `hw`, `fw` name and version.
-  - Only `release.json` is signed (minisign, ed25519, key in `version.UpdatePubKey`); every other file is checked by its sha256 from it.
-- **Check:** daily (if enabled in onboarding step 8 / settings) and "Check now": the newest release of `version.UpdateRepo` via the GitHub API. While the repo is private (until 1.0, owner 2026-11-25) the check and downloads need a read-only GitHub token, entered in Settings → Updates and kept in the data folder (mode 0600); from 1.0 on the repo is public and no token is needed.
+- A tag `vX.Y.Z` builds the release (spec 04 §5, `.github/workflows/release.yml`, `docs/releasing.md`) with **one signed file**: `release.json` + `release.json.minisig`.
+  - `release.json` (format 1): `version`, `date`, `notes` (markdown, from the tag message), `min_version` (optional: older kickers update to an intermediate release first), `server[]`: `{name, url, sha256, size, os, arch}` for `kicker-linux-arm64` and `kicker-linux-amd64`, `firmware[]`: `{name, url, sha256, size, mf, hw, fw, fw_ver, upd}` – one `.uf2` per module and board, named `<fw>-<fw_ver>-<hw>.uf2`.
+  - A module's identity comes from its `platformio.ini`: `[kicker] manifest` and `version` (passed to the firmware as build flags, so the release and the announce never differ), and `board` of each `[env:…]` is its `hw`.
+  - Only `release.json` is signed (minisign, Ed25519, prehashed like the minisign tool; `aead.dev/minisign`); the trusted comment names the version. The public key is `deploy/release.pub` in the repo and is built into release binaries as `version.UpdatePubKey`; the private key, encrypted with a password, is in the repo secrets. Every other file is checked by its sha256 from `release.json`.
+  - CI checks the new signature with the key built into the new binary before publishing. Tags with a pre-release part (`v1.2.0-rc.1`) become GitHub pre-releases.
+  - `kicker release keygen | manifest | sign | verify` do each step by hand; `keygen --test` makes a key without a password for local test releases.
+- **Check:** daily (if enabled in onboarding step 8 / settings) and "Check now": the newest release of `version.UpdateRepo` via the GitHub API. The repo is public (owner, 2026-11-26), so the check and the downloads need no token. Unauthenticated GitHub API calls are limited to 60 per hour per IP address: one check a day plus "Check now" stays far below that; a `403`/`429` is shown as "GitHub is busy, try again later".
 - **Install automatically** (setting, default off): an available server update is installed at the backup time when the table is idle. **Off: admins get the same alert as for firmware** – a badge and "Update to X.Y.Z" with the notes – and install it by hand.
 
 ### Install
@@ -101,7 +104,7 @@ Not in scope: network shares built into the server (SMB/NFS clients), WebDAV/S3 
 | 5. Table | ✓ M7 | side names + colors (the settings form) |
 | 6. Game defaults | ✓ M7 | preset and game defaults, inactivity (the settings form) |
 | 7. Modules | ✓ M7 | discovered modules with the live console: identify, adopt, roles (the modules page) |
-| 8. Backups + updates | backups ✓ M7; updates with task 5 | the backup cycle and locations (the settings component); update check on/off, install automatically on/off, the GitHub token while the repo is private |
+| 8. Backups + updates | backups ✓ M7; updates with task 5 | the backup cycle and locations (the settings component); update check on/off, install automatically on/off |
 | 9. Done | ✓ M7 | the kicker's address, a link to the CA help page (`/trust`), then the scoreboard. The QR code for the app comes with M4 |
 - Steps 5–8 have "Back" and "Skip"; they reuse the settings components (`TableSettingsForm`, `ModulesPanel`, `BackupConfigForm`), so the wizard and the settings never differ. Onboarding is already finished there (admin only); the step survives a reload.
 
@@ -112,7 +115,7 @@ All of this is Admin-only (spec 03 §4: backups and updates are system permissio
 1. ✓ Backups: format, `VACUUM INTO` snapshot, encrypt/decrypt, restore with re-exec and swap, retention, scheduler, before migrations; `kicker backup` / `kicker restore` CLI.
 2. ✓ Backups UI: Settings → Backups (cycle, locations, the list with restore/download/delete, upload), change passphrase; admin badge.
 3. ✓ Onboarding steps 2, 5–9 (the update toggles of step 8 come with task 5).
-4. Releases: `release.json` + minisign in CI, `kicker release sign` helper for local testing with a test key.
+4. ✓ Releases: `release.json` + minisign in CI, `kicker release` (keygen, manifest, sign, verify) for local test releases.
 5. Server updates: check, install, health check, rollback; Settings → Updates; `kicker update`.
 6. Firmware updates over USB: bootloader drive detection and UF2 writing, the flow, modules page; tested on the bench rig with a Pico W / RP2040-Zero.
 7. SD card image + udev rules + install script changes; tested on a Pi 4.
@@ -120,7 +123,7 @@ All of this is Admin-only (spec 03 §4: backups and updates are system permissio
 
 ## 9. Decisions (owner, 2026-11-25)
 - **A. The binary lives in the data folder** (`<data>/bin/current`), so the service updates itself without root. A compromised service already has all the data.
-- **B. Releases come from `Humbarrt/kicker`.** Until 1.0 the repo is private: a read-only token in the settings; it becomes public with 1.0.
+- **B. Releases come from `Humbarrt/kicker`, a public repo** (owner, 2026-11-26: published before 1.0 – no token needed; replaces "private until 1.0 with a read-only token").
 - **C. Writing the `.uf2`:** straight to the bootloader's block device (a udev rule gives `kicker` access; no mounting, no root) – confirmed on the bench rig; if that fails, mounting the drive (udisks2 + polkit) and copying the file.
 - **D. The image is the official Raspberry Pi OS Lite image, modified in CI** (loop-mounted, files copied, unit enabled, compressed).
 - **E. Firmware updates are always by hand**, announced with a badge. Server updates are installed automatically only if that setting is on; otherwise the same alert.

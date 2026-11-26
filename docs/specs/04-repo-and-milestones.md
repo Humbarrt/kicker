@@ -1,10 +1,10 @@
 # Spec 04: Repository layout, tooling + milestones
 
 Status: **Approved v6** (2026-11-23: software-first build order, §7). Turns specs 00–03 into a codebase and a build order.
-Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 in progress (spec 10): tasks 1–3 ✓.
+Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 in progress (spec 10): tasks 1–4 ✓.
 
 ## 1. One monorepo
-Everything lives in one **private** git repository on the owner's GitHub (`Humbarrt/kicker`), so the protocol, the server, the Arduino library and the UI always change together, and one version tag produces one release (D15). The old attempts live in a separate `kicker_old` folder and are not part of the repo.
+Everything lives in one **public** git repository on the owner's GitHub (`Humbarrt/kicker`, public since 2026-11-26), so the protocol, the server, the Arduino library and the UI always change together, and one version tag produces one release (D15). The old attempts live in a separate `kicker_old` folder and are not part of the repo.
 
 ```
 kicker/
@@ -134,17 +134,17 @@ The first tournament run (M6 task 7) found the page at 290 ms p95: the pairing r
 On the Pi (roughly 3× slower) the background refresh will take about 20 s with 100k games: the old numbers show until then. Measure before M3 closes.
 
 ## 5. CI and releases
-- **On every push** (GitHub Actions, private repo):
+- **On every push** (GitHub Actions):
   - Go: vet, tests (incl. the catalog-up-to-date test), arm64 build
   - web: `svelte-check`, build
   - firmware: native library tests, build every module for its reference board
-- **On a tag `vX.Y.Z`:**
-  1. build `kicker` for `linux/arm64` (and `amd64` for testing), with the web build embedded
-  2. build all firmware `.uf2` files and the `catalog/` schemas
-  3. sign everything with the minisign key from the repo secrets, and set the update repo + public key via `-ldflags` (D15)
-  4. publish a GitHub release
+- **On a tag `vX.Y.Z`** (`.github/workflows/release.yml`, how-to in `docs/releasing.md`):
+  1. run the Go tests, build `kicker` for `linux/arm64` (and `amd64` for testing) with the web build embedded and the update repo + public key (`deploy/release.pub`) set via `-ldflags` (D15)
+  2. build every module's firmware for every board, and pack the `catalog/` schemas
+  3. write `release.json` (spec 10 §3) and sign it with the minisign key from the repo secrets (`RELEASE_KEY`, `RELEASE_KEY_PASSWORD`); the new binary checks the signature
+  4. publish a GitHub release (a pre-release for `vX.Y.Z-…` tags)
   - Forks don't have the signing secret, so their builds have updates disabled.
-  - While the repo is private, the Pi needs a read token to fetch releases. The update check becomes token-free once the repo is public.
+  - The repo is public, so the Pi fetches releases without a token. Pull requests from forks run CI without the repo secrets (GitHub's default), so they can never sign a release.
 - **Versioning:** one semver for the whole release. The protocol version (spec 01) and capability versions are separate and only change on breaking changes.
 
 ## 6. Deployment on the Pi
@@ -231,7 +231,7 @@ The milestone numbers are names, not positions: they stay the same so references
 
 ### M7: Operations (spec 10)
 - Full onboarding wizard, encrypted backups + emergency kit, automatic backup before migrations, signed updates with rollback, firmware updates over USB, SD card image.
-- Tasks and decisions in spec 10 §8–9. Done: 1 (backups: package `backup`, age with `filippo.io/age`, restore by restart, several locations, schedule and retention, the list with restore/download/delete and upload, before migrations, `kicker backup` / `kicker restore`), 2 (Settings → Backups, changing the passphrase).
+- Tasks and decisions in spec 10 §8–9. Done: 1 (backups: package `backup`, age with `filippo.io/age`, restore by restart, several locations, schedule and retention, the list with restore/download/delete and upload, before migrations, `kicker backup` / `kicker restore`), 2 (Settings → Backups, changing the passphrase), 3 (the full setup wizard, rules for the next game), 4 (signed releases: package `release`, `kicker release`, the release workflow).
 
 ### M8: Marketplace (D6)
 - Manifest index in a git repo, firmware updates from it.
@@ -257,7 +257,7 @@ The milestone numbers are names, not positions: they stay the same so references
 - **Keep the domain:** it is printed on every table's tags. Renew it long before 2036; if it ever lapsed, someone else could serve the no-app page (not open the app – that needs our signing identity).
 
 ## 8. Decided in review (2026-11-18)
-- Private repo `Humbarrt/kicker`; the owner initialises git.
+- Private repo `Humbarrt/kicker`; the owner initialises git. (2026-11-26: made public.)
 - Target hardware: Raspberry Pi 4, 4 GB.
 - Plain HTTP until M3; HTTPS in M3.
 - Goal sensing: 2 IR break-beam sensors (Adafruit 2168, open collector, internal pull-up) in the tube below each goal that feeds the dispenser.

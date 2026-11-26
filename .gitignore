@@ -1,5 +1,6 @@
 # build output
 /bin/
+/dist/
 /data/
 server/internal/webui/dist/*
 !server/internal/webui/dist/.gitkeep
