@@ -236,6 +236,12 @@ func (s *Service) AutoTime() string {
 	return fmt.Sprintf("%02d:%02d", 3+m/60, m%60)
 }
 
+// Time is the daily backup time (HH:MM, local time) as configured.
+func (s *Service) Time(ctx context.Context) string {
+	c, _ := s.Config(ctx)
+	return s.timeOf(c)
+}
+
 func (s *Service) timeOf(c Config) string {
 	if c.Time != "" {
 		return c.Time

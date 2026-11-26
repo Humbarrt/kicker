@@ -10,6 +10,9 @@ var (
 	UpdateRepo = ""
 	// UpdatePubKey is the minisign public key release signatures are checked against.
 	UpdatePubKey = ""
+	// CrashAfterStart makes `serve` fail right after opening the database – only for testing the
+	// update rollback (spec 10 §3). Never set in a release.
+	CrashAfterStart = ""
 )
 
 // UpdatesEnabled reports whether this build may update itself.

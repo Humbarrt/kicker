@@ -1,6 +1,6 @@
 # Spec 10: Operations (M7)
 
-Status: **Approved v1** (2026-11-25, decisions in §9). Progress: tasks 1–4 ✓. Builds on D14 (backups), D15 (updates), D18 + spec 03 §8 and §12 (emergency kit, onboarding), spec 01 §9 (module updates) and spec 04 §5–6 (releases, deployment).
+Status: **Approved v1** (2026-11-25, decisions in §9). Progress: tasks 1–5 ✓. Builds on D14 (backups), D15 (updates), D18 + spec 03 §8 and §12 (emergency kit, onboarding), spec 01 §9 (module updates) and spec 04 §5–6 (releases, deployment).
 
 ## 1. Scope
 - The full onboarding wizard (spec 03 §12, steps 1–9).
@@ -64,16 +64,19 @@ Not in scope: network shares built into the server (SMB/NFS clients), WebDAV/S3 
 - **Check:** daily (if enabled in onboarding step 8 / settings) and "Check now": the newest release of `version.UpdateRepo` via the GitHub API. The repo is public (owner, 2026-11-26), so the check and the downloads need no token. Unauthenticated GitHub API calls are limited to 60 per hour per IP address: one check a day plus "Check now" stays far below that; a `403`/`429` is shown as "GitHub is busy, try again later".
 - **Install automatically** (setting, default off): an available server update is installed at the backup time when the table is idle. **Off: admins get the same alert as for firmware** – a badge and "Update to X.Y.Z" with the notes – and install it by hand.
 
-### Install
-1. Refused while a game or a tournament game is being played (the button says why).
-2. Backup to `pre-update/`.
-3. Download the server binary, check sha256 against the verified `release.json`.
-4. Install it as `<data>/bin/kicker-X.Y.Z`; `<data>/bin/current` and `<data>/bin/previous` are symlinks. systemd runs `<data>/bin/current` (the install script and the image set this up).
-5. Write `<data>/update.json` (from, to, pre-update backup, attempt 0), switch `current`, **re-exec** the new binary (same process id, systemd keeps watching).
-6. **Health check:** the new binary is healthy when it has opened and migrated the database, the HTTP(S) servers answer and the table actor runs, and it stays up for 60 s. Then it deletes `update.json` and keeps only `current` and `previous`.
-7. **Rollback:** if the new binary exits or crashes before it is healthy, systemd starts `current` again; it finds `update.json` with an attempt already used and rolls back: `current` → the previous binary, **and the pre-update backup is restored** (the old binary refuses a migrated database). At most a few minutes of play are lost. Admins see "Update to X.Y.Z failed, rolled back" with the log lines.
-- `kicker update` (CLI) does the same from a shell, `kicker update --rollback` goes back by hand.
-- Development builds and forks without `UpdateRepo` show "Updates are disabled in this build".
+### Install (package `update`, Settings → Updates)
+1. Refused while a game or a tournament game is being played (the button says why), while another installation runs, if the kicker doesn't run from `<data>/bin/current`, or if the running version is older than the release's `min_version`.
+2. Backup to `backups/pre-update/` (the last 3 are kept).
+3. Download the server binary for this OS/architecture, check size and sha256 against the verified `release.json`.
+4. **Pre-flight:** run `<binary> version`; it must answer with the release's version. A file that can't run here (wrong architecture, damaged) is never switched to – systemd would otherwise restart a binary that never gets as far as rolling itself back.
+5. Install it as `<data>/bin/kicker-X.Y.Z`; `<data>/bin/current` and `<data>/bin/previous` are symlinks, switched atomically. systemd runs `<data>/bin/current` (the install script and the image set this up, task 7).
+6. Write `<data>/update.json` (from, to, the previous binary, the pre-update backup, attempt 0), switch `previous` → what runs now and `current` → the new version, **re-exec** `<data>/bin/current` (same process id, systemd keeps watching).
+7. **Health check:** the new version counts its start (attempt 1) before it opens the database; it is healthy once the database is open and migrated, the table runs and it has stayed up for 60 s (or ≥ 10 s before a planned restart or stop). Then it records "Updated from A to B", deletes `update.json` and keeps only the binaries `current` and `previous` point to. The page shows the steps (backup, download, check, restart, health check) and reloads into the new version.
+8. **Rollback:** if the new version exits or crashes before it is healthy, systemd starts `current` again; the start finds `update.json` with an attempt already used and rolls back before opening the database: the pre-update backup is staged, `current` → the previous binary, re-exec. The old version swaps the backup in at its start (the old binary refuses a migrated database) and shows "The update to X.Y.Z failed" with the reason. The data since the backup – a few seconds to minutes – is lost, and everybody logs in again (sessions are not in backups). A version that failed is not installed automatically again; an admin can retry it by hand.
+- `kicker update [--check]` does the check and the installation from a shell (without the table check – it warns); the service is restarted by hand (`sudo systemctl restart kicker`) and the new version is health-checked as usual. `kicker update --rollback` goes back to `previous` and the newest pre-update backup by hand (refused if `previous` is what runs).
+- Development builds and forks without `UpdateRepo` or the key show "Updates are disabled in this build".
+- Testing: `--update-api` points `serve` and `kicker update` at a fake GitHub; `version.CrashAfterStart` (ldflags, never in a release) makes a build fail after opening the database, to force a rollback.
+- v0.5.0, the first release, has no updater yet: it is updated by hand (task 7's install script); every later version updates itself.
 
 ## 4. Module firmware updates (spec 01 §9)
 - `release.json` lists the firmware files. A module whose `mf` and `hw` match an entry with a newer version than its `fw.ver` shows "Firmware X.Y.Z available" on the modules page, and admins get a badge; "Update all" updates them one after the other. **Always by hand** (owner, 2026-11-25): a module update makes the table unusable for a moment.
@@ -104,7 +107,7 @@ Not in scope: network shares built into the server (SMB/NFS clients), WebDAV/S3 
 | 5. Table | ✓ M7 | side names + colors (the settings form) |
 | 6. Game defaults | ✓ M7 | preset and game defaults, inactivity (the settings form) |
 | 7. Modules | ✓ M7 | discovered modules with the live console: identify, adopt, roles (the modules page) |
-| 8. Backups + updates | backups ✓ M7; updates with task 5 | the backup cycle and locations (the settings component); update check on/off, install automatically on/off |
+| 8. Backups + updates | ✓ M7 | the backup cycle and locations (the settings component); update check on/off, install automatically on/off |
 | 9. Done | ✓ M7 | the kicker's address, a link to the CA help page (`/trust`), then the scoreboard. The QR code for the app comes with M4 |
 - Steps 5–8 have "Back" and "Skip"; they reuse the settings components (`TableSettingsForm`, `ModulesPanel`, `BackupConfigForm`), so the wizard and the settings never differ. Onboarding is already finished there (admin only); the step survives a reload.
 
@@ -116,7 +119,7 @@ All of this is Admin-only (spec 03 §4: backups and updates are system permissio
 2. ✓ Backups UI: Settings → Backups (cycle, locations, the list with restore/download/delete, upload), change passphrase; admin badge.
 3. ✓ Onboarding steps 2, 5–9 (the update toggles of step 8 come with task 5).
 4. ✓ Releases: `release.json` + minisign in CI, `kicker release` (keygen, manifest, sign, verify) for local test releases.
-5. Server updates: check, install, health check, rollback; Settings → Updates; `kicker update`.
+5. ✓ Server updates: check, install, health check, rollback; Settings → Updates (and setup step 8); `kicker update`.
 6. Firmware updates over USB: bootloader drive detection and UF2 writing, the flow, modules page; tested on the bench rig with a Pico W / RP2040-Zero.
 7. SD card image + udev rules + install script changes; tested on a Pi 4.
 8. End-to-end: backup → restore on a fresh server; an update from a locally signed test release, including a forced rollback (Playwright + a Go test).

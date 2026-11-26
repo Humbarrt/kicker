@@ -1,7 +1,7 @@
 # Spec 04: Repository layout, tooling + milestones
 
 Status: **Approved v6** (2026-11-23: software-first build order, §7). Turns specs 00–03 into a codebase and a build order.
-Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 in progress (spec 10): tasks 1–4 ✓.
+Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 in progress (spec 10): tasks 1–5 ✓.
 
 ## 1. One monorepo
 Everything lives in one **public** git repository on the owner's GitHub (`Humbarrt/kicker`, public since 2026-11-26), so the protocol, the server, the Arduino library and the UI always change together, and one version tag produces one release (D15). The old attempts live in a separate `kicker_old` folder and are not part of the repo.
@@ -231,7 +231,7 @@ The milestone numbers are names, not positions: they stay the same so references
 
 ### M7: Operations (spec 10)
 - Full onboarding wizard, encrypted backups + emergency kit, automatic backup before migrations, signed updates with rollback, firmware updates over USB, SD card image.
-- Tasks and decisions in spec 10 §8–9. Done: 1 (backups: package `backup`, age with `filippo.io/age`, restore by restart, several locations, schedule and retention, the list with restore/download/delete and upload, before migrations, `kicker backup` / `kicker restore`), 2 (Settings → Backups, changing the passphrase), 3 (the full setup wizard, rules for the next game), 4 (signed releases: package `release`, `kicker release`, the release workflow).
+- Tasks and decisions in spec 10 §8–9. Done: 1 (backups: package `backup`, age with `filippo.io/age`, restore by restart, several locations, schedule and retention, the list with restore/download/delete and upload, before migrations, `kicker backup` / `kicker restore`), 2 (Settings → Backups, changing the passphrase), 3 (the full setup wizard, rules for the next game), 4 (signed releases: package `release`, `kicker release`, the release workflow; v0.5.0 published 2026-11-26), 5 (server updates: package `update`, Settings → Updates, `kicker update`).
 
 ### M8: Marketplace (D6)
 - Manifest index in a git repo, firmware updates from it.
@@ -247,7 +247,7 @@ The milestone numbers are names, not positions: they stay the same so references
 
 **Link domain `112233444.xyz`** (registered until 2036, spec 08): what the corner tags point to.
 - **Tag content:** `https://112233444.xyz/c?s=<server_id>&c=<corner>` (spec 03 §11). Corners as in spec 02 §5 (`home_1`, …).
-- **Hosting:** Cloudflare Pages, static files only from `linksite/public/` (README there: deploy, settings, checks). No DNS record, tunnel or port ever points to a kicker.
+- **Hosting:** Cloudflare Pages, static files only from `linksite/public/` (README there: deploy, settings, checks). Live since 2026-11-26: Git integration with root `linksite`, output `public`, build watch path `linksite/*`; the zone has only the bare domain's record. No DNS record, tunnel or port ever points to a kicker.
 - **App links:**
   - iOS: `.well-known/apple-app-site-association` lists `<Team ID>.<bundle ID>` for path `/c` with query items `s` and `c`; the app gets the Associated Domains entitlement `applinks:112233444.xyz`. Apple's CDN fetches the file, so it must be public, https with a valid certificate, no redirects.
   - Android: `.well-known/assetlinks.json` with the package name and the SHA-256 of the signing certificate (the Play App Signing key if distributed through Play); intent filter `https://112233444.xyz/c` with `android:autoVerify="true"`.

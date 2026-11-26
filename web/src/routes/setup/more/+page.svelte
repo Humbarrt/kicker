@@ -3,12 +3,13 @@
 	// reuses the settings component for it, so the wizard and the settings never differ; 5–8 can be
 	// skipped. The step survives a reload (sessionStorage) – onboarding is already finished here.
 	import { goto } from '$app/navigation';
-	import { api, type BackupsView } from '#lib/api/client.ts';
+	import { api, type BackupsView, type UpdatesView } from '#lib/api/client.ts';
 	import { session } from '#lib/session.svelte.ts';
 	import { t, tErr, type Key } from '#lib/i18n.svelte.ts';
 	import TableSettingsForm from '#lib/components/TableSettingsForm.svelte';
 	import ModulesPanel from '#lib/components/ModulesPanel.svelte';
 	import BackupConfigForm from '#lib/components/BackupConfigForm.svelte';
+	import UpdateSettings from '#lib/components/UpdateSettings.svelte';
 
 	const KEY = 'kicker.setup.step';
 	const FIRST = 5;
@@ -48,12 +49,17 @@
 	});
 
 	let backups = $state<BackupsView | null>(null);
+	let updates = $state<UpdatesView | null>(null);
 	let error = $state('');
 	$effect(() => {
 		if (step === 8 && !backups)
 			api.backups()
 				.then((v) => (backups = v))
 				.catch((e) => (error = tErr(e)));
+		if (step === 8 && !updates)
+			api.updates()
+				.then((v) => (updates = v))
+				.catch(() => {});
 	});
 
 	const titles: Record<number, Key> = {
@@ -103,7 +109,9 @@
 		{:else if error}
 			<p class="error">{error}</p>
 		{/if}
-		<!-- update check and automatic installs join this step with the updater (M7 task 5) -->
+		{#if updates?.enabled}
+			<UpdateSettings bind:view={updates} />
+		{/if}
 	{:else}
 		<section class="card space-y-4" data-testid="setup-done">
 			<div>

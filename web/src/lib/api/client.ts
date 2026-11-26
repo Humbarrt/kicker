@@ -41,6 +41,8 @@ import type {
 	TournamentSetupInput,
 	TournamentRules,
 	BackupsView,
+	UpdateConfig,
+	UpdatesView,
 	BackupConfig,
 	RestoreView,
 	PlayerTournamentResult
@@ -117,6 +119,11 @@ export const api = {
 		f.append('passphrase', passphrase);
 		return post<RestoreView>(onboarding ? '/api/onboarding/restore' : '/api/backups/restore', f);
 	},
+	// server updates (spec 10 §3, admins)
+	updates: () => get<UpdatesView>('/api/updates'),
+	setUpdateConfig: (c: UpdateConfig) => put<UpdatesView>('/api/updates/config', c),
+	checkUpdates: () => post<UpdatesView>('/api/updates/check'),
+	installUpdate: () => post<UpdatesView>('/api/updates/install'),
 	changePassphrase: (password: string, passphrase: string) => post<{ passphrase: string }>('/api/backups/passphrase', { password, passphrase }),
 
 	// tournaments (spec 09)

@@ -238,6 +238,8 @@ type MeView struct {
 	NeedsKit        bool `json:"needs_kit,omitempty"`
 	// BackupProblem: a backup target failed, or has no backup younger than 48 h (spec 10 §2).
 	BackupProblem bool `json:"backup_problem,omitempty"`
+	// UpdateAvailable: a newer server version can be installed (spec 10 §3).
+	UpdateAvailable bool `json:"update_available,omitempty"`
 }
 
 // LoginInput is the body of POST /api/auth/login.
@@ -364,6 +366,9 @@ func (o Options) authRoutes(api *gin.RouterGroup) {
 			}
 			if o.Backups != nil {
 				me.BackupProblem = o.Backups.Problem(ctx)
+			}
+			if o.Updates != nil {
+				me.UpdateAvailable = o.Updates.UpdateAvailable(ctx)
 			}
 		}
 		c.JSON(http.StatusOK, me)

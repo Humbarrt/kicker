@@ -1,0 +1,113 @@
+# Release (spec 10 §3, spec 04 §5): pushing a tag vX.Y.Z builds the server for the Pi (and amd64
+# for testing) with the update repo and the public key built in, builds every module's firmware,
+# writes release.json, signs it with the release key from the repo secrets and publishes a GitHub
+# release. How to set up the key and cut a release: docs/releasing.md.
+name: release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: write # create the release
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # actions/checkout leaves an annotated tag as a plain ref; fetch it again for its message
+      - run: git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+
+      - name: Version and release key
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          if [ ! -f deploy/release.pub ]; then
+            echo "::error::deploy/release.pub is missing – see docs/releasing.md"; exit 1
+          fi
+          echo "UPDATE_PUBKEY=$(sed -n 2p deploy/release.pub)" >> "$GITHUB_ENV"
+          case "$VERSION" in *-*) echo "PRERELEASE=--prerelease" >> "$GITHUB_ENV" ;; esac
+
+      - name: Release notes from the tag message
+        run: |
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/-----BEGIN/,$d' > notes.md
+          if [ ! -s notes.md ] || [ "$(git cat-file -t "$GITHUB_REF_NAME")" != tag ]; then
+            echo "Kicker $VERSION" > notes.md
+          fi
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('firmware/modules/*/platformio.ini') }}
+      - run: pip install platformio
+
+      - name: Tests
+        run: cd server && go test ./...
+
+      - name: Web build (embedded in the server)
+        run: make generate web
+
+      - name: Server binaries
+        run: |
+          mkdir -p dist
+          PKG=github.com/Humbarrt/kicker/server/internal/version
+          LDFLAGS="-s -w -X $PKG.Version=$VERSION -X $PKG.Commit=${GITHUB_SHA::7} -X $PKG.UpdateRepo=$GITHUB_REPOSITORY -X $PKG.UpdatePubKey=$UPDATE_PUBKEY"
+          for arch in arm64 amd64; do
+            (cd server && CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "$LDFLAGS" -o ../dist/kicker-linux-$arch ./cmd/kicker)
+          done
+
+      - name: Firmware (every board of every module)
+        run: |
+          for m in firmware/modules/*/; do
+            # every [env:…], not only default_envs
+            envs=$(sed -n 's/^\[env:\([^]]*\)\].*/-e \1/p' "$m/platformio.ini")
+            echo "== $m: $envs"
+            pio run -d "$m" $envs
+          done
+
+      - name: release.json
+        run: |
+          dist/kicker-linux-amd64 release manifest --version "$GITHUB_REF_NAME" --notes notes.md --out dist \
+            --url "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME" \
+            --firmware firmware/modules dist/kicker-linux-arm64 dist/kicker-linux-amd64
+          tar -czf "dist/kicker-catalog-$VERSION.tar.gz" catalog
+
+      - name: Sign
+        env:
+          RELEASE_KEY: ${{ secrets.RELEASE_KEY }}
+          KICKER_RELEASE_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$RELEASE_KEY" ]; then echo "::error::the RELEASE_KEY secret is missing – see docs/releasing.md"; exit 1; fi
+          key="$RUNNER_TEMP/release.key"
+          printf '%s\n' "$RELEASE_KEY" > "$key"
+          dist/kicker-linux-amd64 release sign --key "$key" --dir dist
+          rm -f "$key"
+          # with the key built into the binary: proves the binaries will accept this release
+          dist/kicker-linux-amd64 release verify --dir dist
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "Kicker $VERSION" --notes-file notes.md $PRERELEASE

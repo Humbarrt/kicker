@@ -16,6 +16,7 @@ import (
 	"github.com/Humbarrt/kicker/server/internal/onboarding"
 	"github.com/Humbarrt/kicker/server/internal/players"
 	"github.com/Humbarrt/kicker/server/internal/tournaments"
+	"github.com/Humbarrt/kicker/server/internal/update"
 	"github.com/Humbarrt/kicker/server/internal/version"
 	"github.com/Humbarrt/kicker/server/internal/webui"
 )
@@ -59,6 +60,8 @@ type Options struct {
 	Backups *backup.Service
 	// Restart restarts the server (after a restore is staged); nil = not possible here.
 	Restart func()
+	// Updates checks for and installs server updates (spec 10 §3); nil = no update routes.
+	Updates *update.Service
 	Bus     *bus.Bus // nil = no SSE stream
 	// Done ends long-lived responses (SSE) when the server shuts down.
 	Done      <-chan struct{}
@@ -138,6 +141,9 @@ func NewRouter(opts Options) *gin.Engine {
 	}
 	if opts.Backups != nil && opts.Auth != nil {
 		opts.backupRoutes(api)
+	}
+	if opts.Updates != nil && opts.Auth != nil {
+		opts.updateRoutes(api)
 	}
 	if opts.Bus != nil {
 		opts.eventsRoute(api)

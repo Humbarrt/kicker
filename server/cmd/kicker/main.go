@@ -40,6 +40,7 @@ import (
 	"github.com/Humbarrt/kicker/server/internal/table"
 	"github.com/Humbarrt/kicker/server/internal/tlsca"
 	"github.com/Humbarrt/kicker/server/internal/tournaments"
+	"github.com/Humbarrt/kicker/server/internal/update"
 	"github.com/Humbarrt/kicker/server/internal/version"
 )
 
@@ -64,6 +65,8 @@ func main() {
 		err = restoreCmd(args)
 	case "release":
 		err = releaseCmd(args)
+	case "update":
+		err = updateCmd(args)
 	case "version":
 		fmt.Printf("kicker %s (%s), updates enabled: %v\n", version.Version, version.Commit, version.UpdatesEnabled())
 	case "-h", "--help", "help":
@@ -91,7 +94,7 @@ func main() {
 var reexec string
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: kicker <serve|monitor|admin|loadtest|backup|restore|release|version> [flags]\n       kicker admin <create|set-password|reset-code> [--data DIR] <username>")
+	fmt.Fprintln(os.Stderr, "usage: kicker <serve|monitor|admin|loadtest|backup|restore|update|release|version> [flags]\n       kicker admin <create|set-password|reset-code> [--data DIR] <username>")
 }
 
 func serve(args []string) error {
@@ -104,6 +107,7 @@ func serve(args []string) error {
 	noSerial := fs.Bool("no-serial", false, "don't scan serial ports for modules")
 	dev := fs.Bool("dev", false, "development mode (verbose logs, gin debug)")
 	usbRoot := fs.String("usb-root", "/media/kicker", "where USB drives are mounted (backup targets)")
+	updateAPI := fs.String("update-api", "", "GitHub API base URL for update checks (testing; default https://api.github.com)")
 	_ = fs.Parse(args)
 
 	level := slog.LevelInfo
@@ -121,6 +125,14 @@ func serve(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// A new version that didn't come up healthy last time is rolled back before anything else
+	// (spec 10 §3): re-execute the previous version, which swaps the pre-update backup in.
+	if prev, _, err := update.Startup(ctx, *dataDir, version.Version, slog.Default()); err != nil {
+		return err
+	} else if prev != "" {
+		reexec = prev
+		return nil
+	}
 	// A restore staged before the restart is swapped in before the database opens (spec 10 §2).
 	if m, err := backup.ApplyPending(*dataDir); err != nil {
 		return fmt.Errorf("restoring the backup: %w", err)
@@ -141,6 +153,9 @@ func serve(args []string) error {
 		return err
 	}
 	defer st.Close()
+	if version.CrashAfterStart != "" {
+		return errors.New("crashing on purpose (a test build for the update rollback)")
+	}
 
 	serverID, err := st.ServerID(ctx)
 	if err != nil {
@@ -287,17 +302,34 @@ func serve(args []string) error {
 		Busy:  func() bool { return tbl.View().Phase == string(engine.PhasePlaying) },
 		Ready: ob.Done})
 	go backups.Run(ctx)
-	restart := make(chan struct{}, 1)
+	// restart: the binary to re-execute ("" = this one)
+	restart := make(chan string, 1)
+	requestRestart := func(binary string) {
+		select {
+		case restart <- binary:
+		default:
+		}
+	}
+	updater := update.New(update.Options{Store: st, DataDir: *dataDir, Bus: events, API: *updateAPI,
+		Busy:    func() bool { return tbl.View().Phase == string(engine.PhasePlaying) },
+		Ready:   ob.Done,
+		Time:    func() string { return backups.Time(ctx) },
+		Restart: requestRestart,
+	})
+	go updater.Run(ctx)
+	go func() {
+		select {
+		case <-tbl.Ready(): // database open and migrated, the table restored
+			updater.Started(ctx)
+		case <-ctx.Done():
+		}
+	}()
 
 	router := api.NewRouter(api.Options{
 		Backups: backups,
-		Restart: func() {
-			select {
-			case restart <- struct{}{}:
-			default:
-			}
-		},
-		Sim: *sim, ServerID: serverID, Name: name, DataDir: *dataDir, CA: caOpt, Auth: authSvc, Onboarding: ob,
+		Updates: updater,
+		Restart: func() { requestRestart("") },
+		Sim:     *sim, ServerID: serverID, Name: name, DataDir: *dataDir, CA: caOpt, Auth: authSvc, Onboarding: ob,
 		Modules: host, Simulator: simulator, Table: tbl, Players: playerSvc, Coins: coinSvc, Ratings: st, History: st, Stats: stats.Reader{St: st, Cache: statsCache}, Presets: st, Tournaments: tourneys, Bus: events, Done: ctx.Done(),
 	})
 	srv := &http.Server{Addr: *addr, Handler: router, ReadHeaderTimeout: 10 * time.Second}
@@ -328,10 +360,19 @@ func serve(args []string) error {
 		return err // the table could not be restored
 	case <-ctx.Done():
 		slog.Info("shutting down")
-	case <-restart:
+		updater.Stopping(context.Background())
+	case binary := <-restart:
 		slog.Info("shutting down for a restart")
-		if reexec, err = os.Executable(); err != nil {
-			return err
+		updater.Stopping(context.Background())
+		switch {
+		case binary != "":
+			reexec = binary
+		case update.RunningFromCurrent(*dataDir):
+			reexec = update.Current(*dataDir) // after an update this is a new version
+		default:
+			if reexec, err = os.Executable(); err != nil {
+				return err
+			}
 		}
 	}
 	stop() // ends the live streams (they wait on ctx), so Shutdown doesn't wait for browsers

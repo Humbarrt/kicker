@@ -64,6 +64,7 @@ export type Me = {
 	pending_accounts?: number; // admins: sign-ups waiting
 	needs_kit?: boolean; // admins: no emergency kit made yet
 	backup_problem?: boolean; // admins: a backup target failed, or nothing younger than 48 h
+	update_available?: boolean; // admins: a newer server version can be installed
 };
 
 export type PermissionKind = 'on_off' | 'scope' | 'days';
@@ -664,3 +665,24 @@ export interface RestoreView {
 	manifest: BackupManifest;
 	restarting: boolean;
 }
+
+/** Server updates (spec 10 §3). */
+export type UpdateConfig = { check: boolean; auto: boolean };
+export type UpdateResult = { at: string; from: string; to: string; ok: boolean; error?: string };
+export type UpdateAvailable = { version: string; tag: string; date: string; notes: string; min_version?: string; url: string };
+export type UpdatesView = {
+	enabled: boolean; // false: a development build or a fork
+	version: string;
+	repo: string;
+	config: UpdateConfig;
+	status: {
+		last_check?: string;
+		check_error?: string;
+		available: UpdateAvailable | null;
+		last: UpdateResult | null;
+		step?: '' | 'backup' | 'download' | 'check' | 'restart' | 'verify';
+	};
+	/** Why the available update can't be installed now; "" = it can. */
+	blocked: '' | 'disabled' | 'not_installed' | 'busy' | 'none' | 'too_old' | 'running' | 'failed';
+	blocked_text: string;
+};

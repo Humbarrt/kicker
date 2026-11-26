@@ -5,9 +5,9 @@ import { t } from '#lib/i18n.svelte.ts';
 
 export type SettingsTab = { href: string; label: string; badge?: number | string };
 
-/** What needs an admin's attention: sign-ups, a missing emergency kit, failing backups (header badge). */
+/** What needs an admin's attention: sign-ups, a missing emergency kit, failing backups, an update (header badge). */
 export function settingsAttention(): number {
-	return (session.me?.pending_accounts ?? 0) + (session.me?.needs_kit ? 1 : 0) + (session.me?.backup_problem ? 1 : 0);
+	return (session.me?.pending_accounts ?? 0) + (session.me?.needs_kit ? 1 : 0) + (session.me?.backup_problem ? 1 : 0) + (session.me?.update_available ? 1 : 0);
 }
 
 export function settingsTabs(): SettingsTab[] {
@@ -21,6 +21,7 @@ export function settingsTabs(): SettingsTab[] {
 		{ href: '/settings/accounts', label: t('admin.accounts'), show: admin, badge: pending || undefined },
 		{ href: '/settings/security', label: t('admin.security'), show: admin, badge: session.me?.needs_kit ? '!' : undefined },
 		{ href: '/settings/backups', label: t('admin.backups'), show: admin, badge: session.me?.backup_problem ? '!' : undefined },
+		{ href: '/settings/updates', label: t('admin.updates'), show: admin, badge: session.me?.update_available ? 1 : undefined },
 		{ href: '/settings/edits', label: t('admin.edits'), show: session.can('games.revert') },
 		{ href: '/settings/audit', label: t('admin.audit'), show: session.can('log.view') }
 	]
