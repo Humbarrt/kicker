@@ -11,12 +11,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/Humbarrt/kicker/server/internal/auth"
 	"github.com/Humbarrt/kicker/server/internal/backup"
 	"github.com/Humbarrt/kicker/server/internal/emergency"
+	"github.com/Humbarrt/kicker/server/internal/onboarding"
 	"github.com/Humbarrt/kicker/server/internal/store"
 	"github.com/Humbarrt/kicker/server/internal/webui"
 )
@@ -35,8 +38,8 @@ func TestBackupRoutes(t *testing.T) {
 	member := makeAccount(t, as, "mia", auth.GroupMember, auth.StatusApproved)
 	pass, _ := emergency.Passphrase(dir)
 	svc := backup.New(backup.Options{Store: st, DataDir: dir, Name: func() string { return "Test" }})
-	restarts := 0
-	srv := httptest.NewServer(NewRouter(Options{DataDir: dir, Auth: as, Backups: svc, Restart: func() { restarts++ },
+	var restarts atomic.Int32 // Restart runs after the response is flushed
+	srv := httptest.NewServer(NewRouter(Options{DataDir: dir, Auth: as, Backups: svc, Restart: func() { restarts.Add(1) },
 		UI: webui.HandlerFS(fstest.MapFS{})}))
 	defer srv.Close()
 	do := func(token, method, path string, body io.Reader, ctype string) (*http.Response, []byte) {
@@ -89,7 +92,7 @@ func TestBackupRoutes(t *testing.T) {
 		t.Errorf("list %v", list)
 	}
 	// Restore from the list without a passphrase: the current one opens it.
-	if code, v := json1(admin, "POST", "/api/backups/files/"+stored+"/restore", `{}`); code != 200 || restarts != 1 {
+	if code, v := json1(admin, "POST", "/api/backups/files/"+stored+"/restore", `{}`); code != 200 || !restartsAre(&restarts, 1) {
 		t.Fatalf("restore from the list: %d %v", code, v)
 	}
 	if resp, b := do(admin, "GET", "/api/backups/files/"+stored+"?location=nas", nil, ""); resp.StatusCode != 200 || len(b) < 100 {
@@ -115,11 +118,11 @@ func TestBackupRoutes(t *testing.T) {
 		_ = json.Unmarshal(b, &m)
 		return resp.StatusCode, m
 	}
-	if code, v := upload("wrong words"); code != 400 || v["code"] != "wrong_passphrase" || restarts != 1 {
-		t.Errorf("wrong passphrase: %d %v, %d restarts", code, v, restarts)
+	if code, v := upload("wrong words"); code != 400 || v["code"] != "wrong_passphrase" || !restartsAre(&restarts, 1) {
+		t.Errorf("wrong passphrase: %d %v, %d restarts", code, v, restarts.Load())
 	}
-	if code, v := upload(pass); code != 200 || v["restarting"] != true || restarts != 2 {
-		t.Fatalf("restore: %d %v, %d restarts", code, v, restarts)
+	if code, v := upload(pass); code != 200 || v["restarting"] != true || !restartsAre(&restarts, 2) {
+		t.Fatalf("restore: %d %v, %d restarts", code, v, restarts.Load())
 	}
 	if m, _ := backup.Pending(dir); m == nil || m.Name != "Test" {
 		t.Errorf("pending %+v", m)
@@ -138,4 +141,86 @@ func TestBackupRoutes(t *testing.T) {
 	if p, _ := emergency.Passphrase(dir); p != v["passphrase"] {
 		t.Error("the new passphrase wasn't saved")
 	}
+}
+
+// Step 2 of the wizard: whoever holds the wizard can restore a backup instead of starting fresh;
+// once an admin exists, not any more.
+func TestOnboardingRestore(t *testing.T) {
+	ctx := context.Background()
+	// A backup of another kicker.
+	src := t.TempDir()
+	other, err := store.Open(ctx, filepath.Join(src, "kicker.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pass, _ := emergency.Passphrase(src)
+	var file bytes.Buffer
+	if _, err := backup.Write(ctx, &file, backup.Source{Store: other, DataDir: src, Name: "Old"}); err != nil {
+		t.Fatal(err)
+	}
+	other.Close()
+
+	dir := t.TempDir()
+	st, err := store.Open(ctx, filepath.Join(dir, "kicker.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	as := newAuth(t, st)
+	ob, err := onboarding.New(ctx, onboarding.Options{Store: st, Auth: as, Calibrate: func() auth.Params { return fastParams }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restarts atomic.Int32 // Restart runs after the response is flushed
+	srv := httptest.NewServer(NewRouter(Options{ServerID: "sid", DataDir: dir, Auth: as, Onboarding: ob, Restart: func() { restarts.Add(1) },
+		UI: webui.HandlerFS(fstest.MapFS{})}))
+	defer srv.Close()
+	upload := func(c *client, p string) (int, map[string]any) {
+		var body bytes.Buffer
+		w := multipart.NewWriter(&body)
+		fw, _ := w.CreateFormFile("file", "backup.age")
+		fw.Write(file.Bytes())
+		w.WriteField("passphrase", p)
+		w.Close()
+		req, _ := http.NewRequest("POST", srv.URL+"/api/onboarding/restore", &body)
+		req.Header.Set("Content-Type", w.FormDataContentType())
+		req.Header.Set("Origin", srv.URL)
+		resp, err := c.http.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var m map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&m)
+		return resp.StatusCode, m
+	}
+	a, b := newClient(t, srv.URL), newClient(t, srv.URL)
+	if code, _ := upload(a, pass); code != 409 {
+		t.Errorf("restore without the wizard: %d", code)
+	}
+	a.do("POST", "/api/onboarding/start", "")
+	if code, _ := upload(b, pass); code != 409 {
+		t.Errorf("restore from another browser: %d", code)
+	}
+	if code, v := upload(a, "wrong"); code != 400 || v["code"] != "wrong_passphrase" {
+		t.Errorf("wrong passphrase: %d %v", code, v)
+	}
+	if code, v := upload(a, pass); code != 200 || !restartsAre(&restarts, 1) {
+		t.Fatalf("restore: %d %v", code, v)
+	}
+	if m, _ := backup.Pending(dir); m == nil || m.Name != "Old" {
+		t.Errorf("pending %+v", m)
+	}
+}
+
+// restartsAre waits a moment for the restart count to reach n (Restart is called after the
+// response went out).
+func restartsAre(r *atomic.Int32, n int32) bool {
+	for range 200 {
+		if r.Load() == n {
+			return true
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return r.Load() == n
 }

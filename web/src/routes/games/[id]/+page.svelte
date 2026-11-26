@@ -1,6 +1,8 @@
 <script lang="ts">
 	// A game: result, players, rating changes, the event log – and corrections of finished games
 	// (D2): each one is a new event; nothing is deleted.
+	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+	import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
 	import { page } from '$app/state';
 	import { api, type EditRequest, type GameDetail, type RatingChange, type Side } from '#lib/api/client.ts';
 	import { live } from '#lib/live.svelte.ts';
@@ -51,7 +53,7 @@
 </script>
 
 <main class="mx-auto max-w-4xl space-y-6 px-4 py-6">
-	<a href="/games" class="text-sm text-stone-500 hover:text-stone-900">← {t('games.title')}</a>
+	<a href="/games" class="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-900"><ArrowLeft class="size-4" aria-hidden="true" />{t('games.title')}</a>
 	{#if error}<p class="error">{error}</p>{/if}
 
 	{#if d && g}
@@ -138,7 +140,7 @@
 					{#if canEdit}
 						<button class="btn" disabled={busy} onclick={() => edit({ kind: 'add_goal', side: 'home' })}>+ {t('game.add_goal', { side: tSide('home') })}</button>
 						<button class="btn" disabled={busy} onclick={() => edit({ kind: 'add_goal', side: 'away' })}>+ {t('game.add_goal', { side: tSide('away') })}</button>
-						<button class="btn" disabled={busy} onclick={() => edit({ kind: 'swap_sides' })}>⇄ {t('game.swap')}</button>
+						<button class="btn" disabled={busy} onclick={() => edit({ kind: 'swap_sides' })}><ArrowLeftRight class="size-4" aria-hidden="true" />{t('game.swap')}</button>
 					{/if}
 					{#if d.can_void && !g.voided}
 						<button class="btn text-red-700" disabled={busy} onclick={() => edit({ kind: 'void_game' }, t('game.void_confirm'))}>{t('game.void')}</button>

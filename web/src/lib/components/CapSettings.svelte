@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Behaviour settings of one capability instance (spec 01 §4). Wiring stays in the firmware
 	// (spec 04 §10); only known capabilities get fields for now.
+	import Check from '@lucide/svelte/icons/check';
 	import { api, ApiError, type CapView } from '#lib/api/client.ts';
 	import { t, tErr, type Key } from '#lib/i18n.svelte.ts';
 
@@ -48,7 +49,7 @@
 		{/each}
 		<div class="flex items-center gap-2 sm:pb-5">
 			<button class="btn">{t('modules.apply')}</button>
-			{#if saved}<span class="text-sm text-emerald-700">✓</span>{/if}
+			{#if saved}<Check class="size-4 text-emerald-700" aria-hidden="true" />{/if}
 		</div>
 		{#if error}<p class="error sm:col-span-3">{error}</p>{/if}
 	</form>

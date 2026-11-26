@@ -214,24 +214,60 @@ func (t *Table) Start(ctx context.Context, req StartRequest) error {
 		}
 		in.Rules, in.PresetID = rulesFromStore(p.Rules), p.ID
 	default:
-		p, err := t.CurrentPreset(ctx)
+		next, err := t.nextGame(ctx)
 		if err != nil {
 			return err
 		}
-		in.Rules, in.PresetID = rulesFromStore(p.Rules), p.ID
+		in.Rules, in.PresetID = next.Rules, next.PresetID
 	}
 	if err := t.Do(ctx, in); err != nil {
 		return err
+	}
+	if t.Settings().NextRules != NextRulesLast {
+		return nil // a fixed preset: other rules are for this game only
+	}
+	next := engine.NextGame{Rules: in.Rules, PresetID: in.PresetID}
+	if err := st.SetSetting(ctx, lastRulesKey, next); err != nil {
+		t.log.Warn("saving the last game's rules", "err", err)
 	}
 	if req.PresetID != 0 {
 		if err := st.SetSetting(ctx, store.SettingCurrentPreset, req.PresetID); err != nil {
 			t.log.Warn("saving the current preset", "err", err)
 		}
-		if err := t.Do(ctx, engine.SetNextGame{Next: engine.NextGame{Rules: in.Rules, PresetID: in.PresetID}}); err != nil {
-			t.log.Warn("next game rules", "err", err)
-		}
+	}
+	if err := t.Do(ctx, engine.SetNextGame{Next: next}); err != nil {
+		t.log.Warn("next game rules", "err", err)
 	}
 	return nil
+}
+
+// lastRulesKey stores the rules the last game was started with (engine.NextGame as JSON), for
+// Settings.NextRules "last".
+const lastRulesKey = "last_rules"
+
+// nextGame returns the rules a new game gets: the last game's (setting "last", once a game was
+// started with them; a preset with its current rules) or the current preset.
+func (t *Table) nextGame(ctx context.Context) (engine.NextGame, error) {
+	st := t.opts.Store
+	if t.Settings().NextRules == NextRulesLast {
+		var last engine.NextGame
+		if ok, err := st.GetSetting(ctx, lastRulesKey, &last); err != nil {
+			return engine.NextGame{}, err
+		} else if ok {
+			if last.PresetID == 0 {
+				if last.Rules.Validate() == nil {
+					return last, nil
+				}
+			} else if p, err := st.Preset(ctx, last.PresetID); err == nil {
+				return engine.NextGame{Rules: rulesFromStore(p.Rules), PresetID: p.ID}, nil
+			}
+		}
+	}
+	p, err := t.CurrentPreset(ctx)
+	if err != nil {
+		return engine.NextGame{}, err
+	}
+	return engine.NextGame{Rules: rulesFromStore(p.Rules), PresetID: p.ID}, nil
 }
 
 // Settings returns the table settings.
@@ -264,9 +300,19 @@ func (t *Table) SetSettings(ctx context.Context, s Settings, presetID int64) err
 		if err := st.SetSetting(ctx, store.SettingCurrentPreset, presetID); err != nil {
 			return err
 		}
-		return t.Do(ctx, engine.SetNextGame{Next: engine.NextGame{Rules: rulesFromStore(preset.Rules), PresetID: preset.ID}})
+		if s.NextRules == NextRulesLast {
+			// choosing a preset by hand counts as the last rules chosen
+			next := engine.NextGame{Rules: rulesFromStore(preset.Rules), PresetID: preset.ID}
+			if err := st.SetSetting(ctx, lastRulesKey, next); err != nil {
+				return err
+			}
+		}
 	}
-	return nil
+	next, err := t.nextGame(ctx)
+	if err != nil {
+		return err
+	}
+	return t.Do(ctx, engine.SetNextGame{Next: next})
 }
 
 // ErrInvalidPlayer: the player doesn't exist or is archived.
@@ -460,8 +506,8 @@ func (t *Table) restore(ctx context.Context) (engine.State, error) {
 		}
 	}
 	s := engine.Restore(cfg, d, now)
-	if p, err := t.CurrentPreset(ctx); err == nil {
-		s.Next = engine.NextGame{Rules: rulesFromStore(p.Rules), PresetID: p.ID}
+	if next, err := t.nextGame(ctx); err == nil {
+		s.Next = next
 	} else {
 		t.log.Error("no rules for the next game: no kickoff until a preset exists", "err", err)
 	}

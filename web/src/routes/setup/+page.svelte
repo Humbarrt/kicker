@@ -1,9 +1,13 @@
 <script lang="ts">
-	// First-boot wizard (spec 03 §12): language, admin account, emergency kit. The kit belongs to
-	// the new admin's login, so a lost tab logs in again here instead of starting over.
+	// First-boot wizard (spec 03 §12, spec 10 §6), steps 1–4: language, fresh start or restore, admin
+	// account, emergency kit. The kit belongs to the new admin's login, so a lost tab logs in again
+	// here instead of starting over. Steps 5–9 follow on /setup/more, with the settings API.
+	import Sparkles from '@lucide/svelte/icons/sparkles';
+	import ArchiveRestore from '@lucide/svelte/icons/archive-arrow-up';
 	import { goto } from '$app/navigation';
 	import { api, type EmergencyKit as Kit, type OnboardingStatus } from '#lib/api/client.ts';
 	import EmergencyKit from '#lib/components/EmergencyKit.svelte';
+	import RestoreForm from '#lib/components/RestoreForm.svelte';
 	import { session, setLocalLanguage } from '#lib/session.svelte.ts';
 	import { live } from '#lib/live.svelte.ts';
 	import { i18n, languages, t, tErr } from '#lib/i18n.svelte.ts';
@@ -15,6 +19,7 @@
 	let repeat = $state('');
 	let error = $state('');
 	let busy = $state(false);
+	let start = $state<'' | 'fresh' | 'restore'>(''); // step 2
 
 	async function claim() {
 		error = '';
@@ -100,19 +105,19 @@
 			await api.onboardingFinish();
 			await session.refresh();
 			live.reconnect();
-			goto('/', { replaceState: true });
+			goto('/setup/more', { replaceState: true }); // steps 5–9
 		} catch (err) {
 			error = tErr(err);
 		}
 	}
 
-	const step = $derived(status?.step === 'kit' ? 3 : status?.step === 'admin' ? 2 : 1);
+	const step = $derived(status?.step === 'kit' ? 4 : status?.step === 'admin' ? (start === 'fresh' ? 3 : 2) : 1);
 </script>
 
 <main class="mx-auto max-w-md px-4 py-16">
 	<div class="mb-6 text-center">
 		<h1 class="text-3xl font-semibold tracking-tight">{t('setup.title')}</h1>
-		{#if status?.mine || status?.step === 'kit'}<p class="muted mt-1">{t('setup.step', { n: step, of: 3 })}</p>{/if}
+		{#if status?.mine || status?.step === 'kit'}<p class="muted mt-1">{t('setup.step', { n: step, of: 9 })}</p>{/if}
 	</div>
 
 	{#if !status}
@@ -159,6 +164,27 @@
 			{#if error}<p class="error">{error}</p>{/if}
 			<button class="btn btn-primary w-full" disabled={busy}>{t('setup.continue')}</button>
 		</form>
+	{:else if start !== 'fresh'}
+		<!-- Step 2: a new kicker, or one restored from a backup (moving to a new Pi) -->
+		<section class="card space-y-4" data-testid="setup-start">
+			<h2 class="h2">{t('setup.start')}</h2>
+			{#if start === 'restore'}
+				<p class="muted">{t('setup.restore_hint')}</p>
+				<RestoreForm onboarding />
+				<button class="btn w-full" onclick={() => (start = '')}>{t('setup.back')}</button>
+			{:else}
+				<button class="flex w-full items-start gap-3 rounded-xl border border-stone-200 p-4 text-left hover:border-emerald-600 hover:bg-emerald-50"
+					onclick={() => (start = 'fresh')} data-testid="setup-fresh">
+					<Sparkles class="size-6 shrink-0 text-emerald-700" aria-hidden="true" />
+					<span><span class="block font-medium">{t('setup.fresh')}</span><span class="muted text-sm">{t('setup.fresh_hint')}</span></span>
+				</button>
+				<button class="flex w-full items-start gap-3 rounded-xl border border-stone-200 p-4 text-left hover:border-emerald-600 hover:bg-emerald-50"
+					onclick={() => (start = 'restore')} data-testid="setup-restore">
+					<ArchiveRestore class="size-6 shrink-0 text-emerald-700" aria-hidden="true" />
+					<span><span class="block font-medium">{t('setup.restore')}</span><span class="muted text-sm">{t('setup.restore_choice_hint')}</span></span>
+				</button>
+			{/if}
+		</section>
 	{:else}
 		<form class="card space-y-4" onsubmit={createAdmin}>
 			<h2 class="h2">{t('setup.admin')}</h2>

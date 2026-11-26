@@ -1,6 +1,7 @@
 <script lang="ts">
 	// The emergency kit (spec 03 §8): the recovery key and the backup passphrase, shown once, as a
 	// text file to download. With onconfirm, "Continue" needs the "I have saved it" tick.
+	import Check from '@lucide/svelte/icons/check';
 	import type { EmergencyKit } from '#lib/api/client.ts';
 	import { t } from '#lib/i18n.svelte.ts';
 
@@ -61,7 +62,7 @@
 	<div class="flex flex-wrap gap-2">
 		<button type="button" class="btn btn-primary" onclick={download}>{t('kit.download')}</button>
 		<button type="button" class="btn" onclick={copy}>{copied ? t('kit.copied') : t('kit.copy')}</button>
-		{#if downloaded}<span class="self-center text-sm text-emerald-700">✓ {kit.filename}</span>{/if}
+		{#if downloaded}<span class="inline-flex items-center gap-1 self-center text-sm text-emerald-700"><Check class="size-4" aria-hidden="true" />{kit.filename}</span>{/if}
 	</div>
 
 	{#if onconfirm}

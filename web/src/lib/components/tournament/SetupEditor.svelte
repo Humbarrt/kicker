@@ -1,6 +1,9 @@
 <script lang="ts">
 	// Creating or editing a tournament (spec 09 §4): name, players and teams, the format – chosen
 	// from the options sorted by how long they take – its options, and the game rules.
+	import X from '@lucide/svelte/icons/x';
+	import ArrowUp from '@lucide/svelte/icons/arrow-up';
+	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { api, type TournamentRules, type TeamMode, type TournamentDetail, type TournamentOption, type TournamentStage } from '#lib/api/client.ts';
@@ -170,13 +173,13 @@
 						{@const p = players.get(id)}
 						<span class="chip gap-1.5 bg-stone-100 py-1 pr-1">
 							{#if p}<PlayerAvatar player={p} size={20} />{tPlayer(p)}{/if}
-							<button class="rounded-full px-1 text-stone-400 hover:text-red-600" aria-label="×" onclick={() => remove(ti, id)}>×</button>
+							<button class="rounded-full px-1 text-stone-400 hover:text-red-600" aria-label={t('app.remove')} onclick={() => remove(ti, id)}><X class="size-3.5" aria-hidden="true" /></button>
 						</span>
 					{/each}
 					{#if !compact}<span class="flex-1"></span>{/if}
 					{#if manualSeeds}
-						<button class="btn btn-sm" aria-label="↑" disabled={ti === 0} onclick={() => move(ti, -1)}>↑</button>
-						<button class="btn btn-sm" aria-label="↓" disabled={ti === entries.length - 1} onclick={() => move(ti, 1)}>↓</button>
+						<button class="btn btn-sm" aria-label={t('app.move_up')} disabled={ti === 0} onclick={() => move(ti, -1)}><ArrowUp class="size-4" aria-hidden="true" /></button>
+						<button class="btn btn-sm" aria-label={t('app.move_down')} disabled={ti === entries.length - 1} onclick={() => move(ti, 1)}><ArrowDown class="size-4" aria-hidden="true" /></button>
 					{/if}
 				</li>
 			{/each}

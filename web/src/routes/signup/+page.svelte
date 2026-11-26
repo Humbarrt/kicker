@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Sign-up (spec 03 §3): username, password and "who are you?" – an existing player without an
 	// account (approval mode; an admin confirms) or a new player. Open sign-ups always get a new one.
+	import Check from '@lucide/svelte/icons/check';
 	import { goto } from '$app/navigation';
 	import { api, type Player } from '#lib/api/client.ts';
 	import { session } from '#lib/session.svelte.ts';
@@ -91,7 +92,7 @@
 									<input type="radio" class="sr-only" bind:group={playerId} value={p.id} />
 									<PlayerAvatar player={p} size={28} />
 									<span class="flex-1">{tPlayer(p)}</span>
-									{#if playerId === p.id}<span class="text-emerald-700">✓</span>{/if}
+									{#if playerId === p.id}<Check class="size-4 text-emerald-700" aria-hidden="true" />{/if}
 								</label>
 							{/each}
 						</div>

@@ -263,6 +263,7 @@ If a module goes offline during a game, the scoreboard page shows a warning and 
 ## 13. Settings (defaults)
 | Setting | Default |
 |---|---|
+| `next_rules` | `last` – a new game gets the rules the last game was started with (a preset or custom rules); `preset` – always the current preset, other rules chosen in "New game" are for that game only |
 | `kickoff_requires` | `both_sides` |
 | `kickoff_delay_s` | 5 |
 | `first_ball` | `random` |
@@ -284,6 +285,7 @@ If a module goes offline during a game, the scoreboard page shows a warning and 
 - A manual pause ends with the next goal (which counts) or "Resume".
 - Members may change the current/next game's win conditions (`rules_changed`), but not presets.
 - `kickoff_requires` defaults to `both_sides`. 5 min until pause, 3 min until sleep.
+- (2026-11-26) **Rules for the next game:** "Same as the last game" (default, `next_rules: last`, kept across restarts) or a fixed preset (`next_rules: preset`). Tournament games don't change it.
 - (2026-11-23) **No queued games.** A game interrupted by resuming another one goes to the paused games list and is only resumed by hand. Smart wake only brings back the most recently paused game while no new game has been started since, and only once one of its players per side is back.
 
 ## 15. Open questions

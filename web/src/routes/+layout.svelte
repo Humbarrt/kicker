@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Menu from '@lucide/svelte/icons/menu';
+	import X from '@lucide/svelte/icons/x';
 	import './layout.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import { afterNavigate, goto } from '$app/navigation';
@@ -53,7 +55,7 @@
 	// Mobile: a side menu instead of the header links.
 	let menu = $state(false);
 	afterNavigate(() => (menu = false));
-	const setup = $derived(page.url.pathname === '/setup');
+	const setup = $derived(page.url.pathname.startsWith('/setup'));
 </script>
 
 <svelte:head>
@@ -95,7 +97,7 @@
 					{/if}
 				</div>
 				<button class="btn btn-sm relative ml-auto md:hidden" aria-label={t('nav.menu')} aria-expanded={menu} onclick={() => (menu = true)}>
-					<svg viewBox="0 0 20 20" class="size-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 5h14M3 10h14M3 15h14" /></svg>{#if attention}<span class="absolute -top-1 -right-1 size-2.5 rounded-full bg-amber-500"></span>{/if}
+					<Menu class="size-5" aria-hidden="true" />{#if attention}<span class="absolute -top-1 -right-1 size-2.5 rounded-full bg-amber-500"></span>{/if}
 				</button>
 			</div>
 		</header>
@@ -113,7 +115,7 @@
 						{:else}
 							<a href="/login" class="btn btn-primary btn-sm">{t('nav.login')}</a>
 						{/if}
-						<button class="btn btn-sm" aria-label={t('app.close')} onclick={() => (menu = false)}>✕</button>
+						<button class="btn btn-sm" aria-label={t('app.close')} onclick={() => (menu = false)}><X class="size-4" aria-hidden="true" /></button>
 					</div>
 					<nav class="flex-1 space-y-1 overflow-y-auto p-3 text-sm">
 						{#each nav.filter((n) => n.show && n.prefix !== '/settings') as n (n.href)}

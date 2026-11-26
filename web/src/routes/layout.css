@@ -36,6 +36,20 @@
 	.input {
 		@apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm shadow-xs placeholder:text-stone-400 focus:border-emerald-600 focus:outline-none;
 	}
+	/* Selects draw their own arrow (Lucide chevron-down), so it sits at the same place with some
+	   room to the right in every browser. */
+	select.input {
+		appearance: none;
+		padding-right: 2.25rem;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2378716c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 0.75rem center;
+		background-size: 1rem;
+	}
+	select.input[multiple] {
+		padding-right: 0.75rem;
+		background-image: none;
+	}
 	.label {
 		@apply mb-1 block text-sm font-medium text-stone-700;
 	}

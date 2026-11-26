@@ -1,6 +1,8 @@
 <script lang="ts">
 	// The game history, newest first, with filters. The filters live in the URL (?player=1,2&kind=team…),
 	// so a filtered list can be linked to – the profile's "All games" does that.
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import X from '@lucide/svelte/icons/x';
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -126,7 +128,7 @@
 					{#if p}<PlayerAvatar player={p} size={20} />{/if}
 					{p ? tPlayer(p) : '…'}
 					<button class="rounded px-1 text-stone-500 hover:bg-stone-200 hover:text-stone-900" aria-label={t('filter.remove')}
-						onclick={() => update({ player: sel.player.filter((x) => x !== id) })}>✕</button>
+						onclick={() => update({ player: sel.player.filter((x) => x !== id) })}><X class="size-3.5" aria-hidden="true" /></button>
 				</span>
 			{/each}
 			{#if sel.player.length < 4}
@@ -202,8 +204,7 @@
 		<!-- Phones: above the list, folded. -->
 		<details class="card group lg:hidden" bind:open={filtersOpen} data-testid="game-filters-mobile">
 			<summary class="flex cursor-pointer list-none items-center gap-2 font-medium [&::-webkit-details-marker]:hidden">
-				<svg viewBox="0 0 20 20" class="size-4 shrink-0 text-stone-500 transition-transform group-open:rotate-90" fill="none"
-					stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4l6 6-6 6" /></svg>
+				<ChevronRight class="size-4 shrink-0 text-stone-500 transition-transform group-open:rotate-90" aria-hidden="true" />
 				{@render filterHeader()}
 			</summary>
 			<div class="mt-4">{@render filterFields()}</div>

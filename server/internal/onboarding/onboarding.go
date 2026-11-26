@@ -1,5 +1,6 @@
-// Package onboarding is the first-boot wizard (spec 03 §12): step 1 (language), step 3 (admin
-// account) and step 4 (emergency kit); the other steps follow with their milestones.
+// Package onboarding is the first-boot wizard (spec 03 §12, spec 10 §6): step 1 (language), step 2
+// (a restore instead of a fresh start), step 3 (admin account) and step 4 (emergency kit). Steps 5–9
+// run after it with the normal settings API, logged in as the new admin.
 package onboarding
 
 import (
@@ -167,6 +168,20 @@ func (o *Onboarding) check(token string) error {
 		return ErrNotClaimed
 	}
 	o.claimSeen = o.opts.Now()
+	return nil
+}
+
+// CanRestore checks that this browser may restore a backup (step 2): it holds the wizard, and no
+// admin has been made yet – a restore brings the backup's accounts instead.
+func (o *Onboarding) CanRestore(token string) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if err := o.check(token); err != nil {
+		return err
+	}
+	if o.admin {
+		return ErrDone
+	}
 	return nil
 }
 

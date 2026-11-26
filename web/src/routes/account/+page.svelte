@@ -1,4 +1,7 @@
 <script lang="ts">
+	import Smartphone from '@lucide/svelte/icons/smartphone';
+	import Monitor from '@lucide/svelte/icons/monitor';
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import { goto } from '$app/navigation';
 	import { api } from '#lib/api/client.ts';
 	import { session } from '#lib/session.svelte.ts';
@@ -102,7 +105,7 @@
 					<a href="/players/{myPlayer.id}" class="flex items-center gap-3 rounded-xl p-2 hover:bg-stone-50">
 						<PlayerAvatar player={myPlayer} size={48} />
 						<span class="flex-1 font-medium">{tPlayer(myPlayer)}</span>
-						<span class="muted">{t('players.open')} →</span>
+						<span class="muted inline-flex items-center gap-1">{t('players.open')} <ArrowRight class="size-4" aria-hidden="true" /></span>
 					</a>
 				{:else if session.can('profile.own')}
 					<p class="muted mb-3">{t('players.create_mine_hint')}</p>
@@ -139,9 +142,9 @@
 					<li class="flex items-center gap-3 py-2.5">
 						<span class="grid size-9 shrink-0 place-items-center rounded-full bg-stone-100 text-stone-500" aria-hidden="true">
 							{#if d.kind === 'app'}
-								<svg viewBox="0 0 20 20" class="size-4" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="2.5" width="8" height="15" rx="1.5" /><path d="M9 15h2" /></svg>
+								<Smartphone class="size-4" />
 							{:else}
-								<svg viewBox="0 0 20 20" class="size-4" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="4" width="15" height="10" rx="1.5" /><path d="M7 17h6" /></svg>
+								<Monitor class="size-4" />
 							{/if}
 						</span>
 						<span class="min-w-0 flex-1">

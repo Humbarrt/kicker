@@ -1,5 +1,6 @@
 <script lang="ts">
 	// A team in a tournament: its players' pictures and names. Byes and unknown sides are muted.
+	import Check from '@lucide/svelte/icons/check';
 	import type { TEntrant } from '#lib/api/client.ts';
 	import { players } from '#lib/players.svelte.ts';
 	import { t, tPlayer } from '#lib/i18n.svelte.ts';
@@ -35,7 +36,7 @@
 			<span class="truncate {entrant.dropped ? 'line-through decoration-stone-400' : ''}">{teamName(entrant)}</span>
 		{/if}
 		{#if entrant.dropped}<span class="chip shrink-0 bg-stone-100 text-stone-500">{t('tourn.dropped')}</span>{/if}
-		{#if present}<span class="chip bg-emerald-100 text-emerald-800" title={t('tourn.checked_in')}>✓ {t('tourn.checked_in')}</span>{/if}
+		{#if present}<span class="chip bg-emerald-100 text-emerald-800" title={t('tourn.checked_in')}><Check class="size-3.5" aria-hidden="true" />{t('tourn.checked_in')}</span>{/if}
 	{:else}
 		<span class="truncate text-stone-400 italic">{teamName(entrant)}</span>
 	{/if}

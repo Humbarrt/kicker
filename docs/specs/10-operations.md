@@ -1,6 +1,6 @@
 # Spec 10: Operations (M7)
 
-Status: **Approved v1** (2026-11-25, decisions in §9). Progress: tasks 1–2 ✓. Builds on D14 (backups), D15 (updates), D18 + spec 03 §8 and §12 (emergency kit, onboarding), spec 01 §9 (module updates) and spec 04 §5–6 (releases, deployment).
+Status: **Approved v1** (2026-11-25, decisions in §9). Progress: tasks 1–3 ✓. Builds on D14 (backups), D15 (updates), D18 + spec 03 §8 and §12 (emergency kit, onboarding), spec 01 §9 (module updates) and spec 04 §5–6 (releases, deployment).
 
 ## 1. Scope
 - The full onboarding wizard (spec 03 §12, steps 1–9).
@@ -92,18 +92,18 @@ Not in scope: network shares built into the server (SMB/NFS clients), WebDAV/S3 
 - `deploy/install.sh` keeps working on an existing Raspberry Pi OS and does the same.
 
 ## 6. Onboarding wizard (spec 03 §12)
-| Step | Now | M7 |
+| Step | Status | What |
 |---|---|---|
 | 1. Language | ✓ | – |
-| 2. Fresh or restore | – | upload + passphrase (§2); restoring ends the wizard |
+| 2. Fresh or restore | ✓ M7 | "Start fresh" or "Restore a backup": file + passphrase (§2), open to whoever holds the wizard (`POST /api/onboarding/restore`); the kicker restarts with the backup, which ends the wizard |
 | 3. Admin account | ✓ | – |
-| 4. Emergency kit | ✓ | – |
-| 5. Table | – | side names + colors (the settings form) |
-| 6. Game defaults | – | preset, pause/sleep minutes, on wake, kickoff requires, first ball (the settings form) |
-| 7. Modules | – | discovered modules with the live console: identify, adopt, roles (the modules page) |
-| 8. Backups + updates | – | schedule, time, retention, locations; update check on/off, install automatically on/off, the GitHub token while the repo is private |
-| 9. Done | – | the kicker's address, a link to the CA help page (`/trust`), then the scoreboard. The QR code for the app comes with M4 |
-- Steps 5–8 have "Skip"; they reuse the settings components, so the wizard and the settings never differ.
+| 4. Emergency kit | ✓ | "Finish setup" ends onboarding and leads on to `/setup/more` |
+| 5. Table | ✓ M7 | side names + colors (the settings form) |
+| 6. Game defaults | ✓ M7 | preset and game defaults, inactivity (the settings form) |
+| 7. Modules | ✓ M7 | discovered modules with the live console: identify, adopt, roles (the modules page) |
+| 8. Backups + updates | backups ✓ M7; updates with task 5 | the backup cycle and locations (the settings component); update check on/off, install automatically on/off, the GitHub token while the repo is private |
+| 9. Done | ✓ M7 | the kicker's address, a link to the CA help page (`/trust`), then the scoreboard. The QR code for the app comes with M4 |
+- Steps 5–8 have "Back" and "Skip"; they reuse the settings components (`TableSettingsForm`, `ModulesPanel`, `BackupConfigForm`), so the wizard and the settings never differ. Onboarding is already finished there (admin only); the step survives a reload.
 
 ## 7. Permissions
 All of this is Admin-only (spec 03 §4: backups and updates are system permissions). Restore during onboarding is open to whoever holds the wizard.
@@ -111,7 +111,7 @@ All of this is Admin-only (spec 03 §4: backups and updates are system permissio
 ## 8. Milestone tasks (proposed order)
 1. ✓ Backups: format, `VACUUM INTO` snapshot, encrypt/decrypt, restore with re-exec and swap, retention, scheduler, before migrations; `kicker backup` / `kicker restore` CLI.
 2. ✓ Backups UI: Settings → Backups (cycle, locations, the list with restore/download/delete, upload), change passphrase; admin badge.
-3. Onboarding steps 2, 5–9.
+3. ✓ Onboarding steps 2, 5–9 (the update toggles of step 8 come with task 5).
 4. Releases: `release.json` + minisign in CI, `kicker release sign` helper for local testing with a test key.
 5. Server updates: check, install, health check, rollback; Settings → Updates; `kicker update`.
 6. Firmware updates over USB: bootloader drive detection and UF2 writing, the flow, modules page; tested on the bench rig with a Pico W / RP2040-Zero.

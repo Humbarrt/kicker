@@ -452,4 +452,13 @@ func (o Options) onboardingRoutes(api *gin.RouterGroup) {
 		o.login(c, auth.LoginRequest{Username: in.Username, Password: in.Password, IP: c.ClientIP(),
 			Kind: auth.KindWeb, DeviceName: "", UserAgent: c.Request.UserAgent()})
 	})
+	// Step 2: restore a backup instead of starting fresh (spec 10 §6); the restarted kicker is
+	// the backup's, setup included.
+	g.POST("/restore", func(c *gin.Context) {
+		if err := ob.CanRestore(claim(c)); err != nil {
+			authError(c, err)
+			return
+		}
+		o.restore(c)
+	})
 }

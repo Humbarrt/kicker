@@ -1,9 +1,12 @@
 <script lang="ts">
-	// Picking players: a search field and a grid of tiles with picture or color, players who
-	// played recently first. With max 1 a tap picks and closes; otherwise players are ticked
+	// Picking players: a search field and a grid of tiles with picture or color. "Played
+	// recently" is two rows: the guest (always, as the first tile), then the players with the
+	// latest games; everyone else, and recent players that don't fit, follow A–Z. With max 1 a tap picks and closes; otherwise players are ticked
 	// and added together ("Select all" without a max). Taken players stay visible, greyed out
 	// with a hint; the guest can always be picked. A dialog on wide screens, a bottom sheet on
 	// phones.
+	import X from '@lucide/svelte/icons/x';
+	import Check from '@lucide/svelte/icons/check';
 	import { players } from '#lib/players.svelte.ts';
 	import { t, tPlayer } from '#lib/i18n.svelte.ts';
 	import type { Player } from '#lib/api/client.ts';
@@ -54,14 +57,28 @@
 	const isRecent = (p: Player) => !p.guest && (p.last_played ?? 0) >= cutoff;
 	const byName = (a: Player, b: Player) => tPlayer(a).localeCompare(tPlayer(b));
 
-	// The guest first, then recent players (latest game first), then everyone else A–Z.
+	// Two rows of "Played recently": 3 tiles per row on phones, 4 from sm on. The guest takes the
+	// first tile, so 5 (phones) or 7 recent players fit; the ones between are shown in "Played
+	// recently" from sm on and in "All players" below it on phones.
+	const PHONE = 2 * 3 - 1;
+	const WIDE = 2 * 4 - 1;
+	type Entry = { p: Player; cls?: string };
 	const matches = $derived.by(() => {
 		const q = fold(query.trim());
 		const list = players.active.filter((p) => !q || fold(tPlayer(p)).includes(q));
 		const guest = list.filter((p) => p.guest);
 		const recent = list.filter(isRecent).sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0));
-		const rest = list.filter((p) => !p.guest && !isRecent(p)).sort(byName);
-		return { guest, recent, rest, all: [...guest, ...recent, ...rest] };
+		const others = list.filter((p) => !p.guest && !isRecent(p));
+		const top: Entry[] = [
+			...guest.map((p) => ({ p })),
+			...recent.slice(0, WIDE).map((p, i) => ({ p, cls: i >= PHONE ? 'max-sm:hidden' : '' }))
+		];
+		const rest: Entry[] = [
+			...recent.slice(PHONE, WIDE).map((p) => ({ p, cls: 'sm:hidden' })),
+			...recent.slice(WIDE).map((p) => ({ p })),
+			...others.map((p) => ({ p }))
+		].sort((a, b) => byName(a.p, b.p));
+		return { top, rest, recent: recent.length, all: [...guest, ...recent, ...others.sort(byName)] };
 	});
 	const pickable = (p: Player) => p.guest || !taken.has(p.id);
 	const full = $derived(max > 0 && selected.length >= max);
@@ -98,25 +115,25 @@
 	}
 </script>
 
-{#snippet tile(p: Player)}
+{#snippet tile(p: Player, cls = '')}
 	{@const on = selected.includes(p.id)}
 	{@const why = p.guest ? '' : taken.get(p.id)}
 	<button type="button" onclick={() => tap(p)} disabled={!!why || (full && !on)} data-testid="pick-{p.id}" aria-pressed={max === 1 ? undefined : on}
 		class="relative flex min-w-0 flex-col items-center gap-1 rounded-xl border px-1 py-2 text-center transition
 			{on ? 'border-emerald-600 bg-emerald-50' : 'border-transparent hover:bg-stone-100'}
-			{why ? 'opacity-40' : ''} disabled:cursor-not-allowed">
+			{why ? 'opacity-40' : ''} {cls} disabled:cursor-not-allowed">
 		<PlayerAvatar player={p} size={44} />
 		<span class="w-full truncate text-sm">{tPlayer(p)}</span>
 		{#if why}<span class="w-full truncate text-xs text-stone-500">{why}</span>{/if}
-		{#if on}<span class="absolute top-1 right-2 grid size-5 place-items-center rounded-full bg-emerald-600 text-xs text-white">✓</span>{/if}
+		{#if on}<span class="absolute top-1 right-2 grid size-5 place-items-center rounded-full bg-emerald-600 text-xs text-white"><Check class="size-3.5" strokeWidth={3} aria-hidden="true" /></span>{/if}
 	</button>
 {/snippet}
 
-{#snippet section(title: string, list: Player[])}
+{#snippet section(title: string, list: Entry[], testid = '')}
 	{#if list.length}
 		{#if title}<h3 class="px-1 pt-2 text-xs font-semibold tracking-wide text-stone-500 uppercase">{title}</h3>{/if}
-		<div class="grid grid-cols-3 gap-1 sm:grid-cols-4">
-			{#each list as p (p.id)}{@render tile(p)}{/each}
+		<div class="grid grid-cols-3 gap-1 sm:grid-cols-4" data-testid={testid || undefined}>
+			{#each list as e (e.p.id)}{@render tile(e.p, e.cls)}{/each}
 		</div>
 	{/if}
 {/snippet}
@@ -130,7 +147,7 @@
 				<h2 class="h2">{title}</h2>
 				{#if hint}<p class="muted text-sm">{hint}</p>{/if}
 			</div>
-			<button type="button" class="grid size-8 place-items-center rounded-full text-stone-500 hover:bg-stone-100" aria-label={t('app.cancel')} onclick={() => (open = false)}>×</button>
+			<button type="button" class="grid size-8 place-items-center rounded-full text-stone-500 hover:bg-stone-100" aria-label={t('app.cancel')} onclick={() => (open = false)}><X class="size-4" aria-hidden="true" /></button>
 		</div>
 		<div class="flex items-center gap-2">
 			<input bind:this={search} bind:value={query} onkeydown={onkey} type="search" class="input flex-1" placeholder={t('pick.search')}
@@ -144,12 +161,11 @@
 	<div class="min-h-40 flex-1 overflow-y-auto px-4 pb-3">
 		{#if !matches.all.length}
 			<p class="muted py-8 text-center">{t('pick.none')}</p>
-		{:else if query.trim() || !matches.recent.length}
-			{@render section('', matches.all)}
+		{:else if query.trim() || !matches.recent}
+			{@render section('', matches.all.map((p) => ({ p })))}
 		{:else}
-			{@render section('', matches.guest)}
-			{@render section(t('pick.recent'), matches.recent)}
-			{@render section(t('pick.all'), matches.rest)}
+			{@render section(t('pick.recent'), matches.top, 'pick-recent')}
+			{@render section(t('pick.all'), matches.rest, 'pick-rest')}
 		{/if}
 	</div>
 

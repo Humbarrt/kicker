@@ -175,7 +175,7 @@ func TestOnboardingFlow(t *testing.T) {
 	}
 	code, kit := a.do("POST", "/api/onboarding/kit", "")
 	if code != 200 || len(strings.Fields(kit["recovery_key"].(string))) != 12 || len(strings.Fields(kit["backup_passphrase"].(string))) != 8 ||
-		!strings.Contains(kit["text"].(string), kit["recovery_key"].(string)[:5]) {
+		!strings.Contains(kit["text"].(string), " 1. "+strings.Fields(kit["recovery_key"].(string))[0]+" ") { // the kit numbers the words
 		t.Fatalf("kit: %d %v", code, kit)
 	}
 	if code, st := a.do("POST", "/api/onboarding/finish", ""); code != 200 || st["done"] != true {

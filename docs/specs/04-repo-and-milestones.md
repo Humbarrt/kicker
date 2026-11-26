@@ -1,7 +1,7 @@
 # Spec 04: Repository layout, tooling + milestones
 
 Status: **Approved v6** (2026-11-23: software-first build order, §7). Turns specs 00–03 into a codebase and a build order.
-Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 in progress (spec 10): tasks 1–2 ✓.
+Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 in progress (spec 10): tasks 1–3 ✓.
 
 ## 1. One monorepo
 Everything lives in one **private** git repository on the owner's GitHub (`Humbarrt/kicker`), so the protocol, the server, the Arduino library and the UI always change together, and one version tag produces one release (D15). The old attempts live in a separate `kicker_old` folder and are not part of the repo.
@@ -62,7 +62,7 @@ kicker/
 | Server | Go 1.25, gin, go.bug.st/serial, `ncruces/go-sqlite3` (SQLite compiled to WebAssembly, no cgo), `tygo` (TypeScript types from the API DTOs), golangci-lint |
 | Database | own embedded migration runner (~80 lines, forward only, refuses a database newer than the binary); queries hand-written in `store/`. sqlc can be added later if the query count grows |
 | JSON Schemas | own reflection-based generator in `protocol/schema.go` (no dependency). Field rules shared with the decoder: no `omitempty` = required, `enum`/`min`/`max`/`doc` tags |
-| Web | pnpm 10, **SvelteKit 3** / Svelte 5 (config lives in `vite.config.ts`), Tailwind 4, shadcn-svelte (bits-ui), layerchart |
+| Web | pnpm 10, **SvelteKit 3** / Svelte 5 (config lives in `vite.config.ts`), Tailwind 4, shadcn-svelte (bits-ui), layerchart; icons only from `@lucide/svelte` (ISC, deep imports `@lucide/svelte/icons/<name>`), no hand-drawn SVG icons |
 | App | Tauri v2, Rust stable |
 | Firmware | PlatformIO, `arduino-pico` core (RP2040/RP2350) via the maxgerhardt platform, ArduinoJson 7. Test boards: RP2040-Zero (reference), Pico W (`-e pico-w`) |
 | Build | `make` (as in v1/v2) |

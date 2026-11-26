@@ -1,4 +1,5 @@
 <script lang="ts">
+	import X from '@lucide/svelte/icons/x';
 	import { activeTournament } from '#lib/tournament.svelte.ts';
 	// Who plays on one side (spec 02 §4): the registrations by slot – stale players dimmed, unknown
 	// coins to assign – and coins that don't count. After a game, its roster until somebody
@@ -85,7 +86,7 @@
 			{/if}
 			{#if canEdit}
 				<button class="grid size-6 place-items-center rounded-full text-stone-500 hover:bg-stone-200 hover:text-stone-900"
-					aria-label={t('reg.remove', { name: p ? tPlayer(p) : t('coins.unknown') })} onclick={() => remove(r.slot)}>×</button>
+					aria-label={t('reg.remove', { name: p ? tPlayer(p) : t('coins.unknown') })} onclick={() => remove(r.slot)}><X class="size-3.5" aria-hidden="true" /></button>
 			{/if}
 		</span>
 	{/each}

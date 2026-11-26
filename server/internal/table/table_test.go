@@ -480,3 +480,81 @@ func TestBackfillProjections(t *testing.T) {
 		t.Error("runs only once per version")
 	}
 }
+
+// Settings.NextRules: "last" keeps the rules the last game was started with (custom ones too,
+// across a restart); "preset" always starts with the current preset.
+func TestNextRules(t *testing.T) {
+	ctx := context.Background()
+	st := openStore(t)
+	f := start(t, st, engine.DefaultConfig())
+	short, _ := st.PresetByLabel(ctx, "Short")
+	official, _ := st.PresetByLabel(ctx, "Official")
+	custom := engine.Rules{WinScore: 4, WinBy: 1, TimeTie: engine.TimeTieGoldenGoal}
+	next := func(tbl *Table) *NextView { return tbl.View().Next }
+
+	// "last" (default): custom rules become the next game's rules, and stay after a restart
+	if err := f.tbl.Start(ctx, StartRequest{Rules: &custom}); err != nil {
+		t.Fatal(err)
+	}
+	if n := next(f.tbl); n == nil || n.PresetID != nil || n.Rules.WinScore != 4 {
+		t.Fatalf("after custom rules: %+v", n)
+	}
+	f.stop()
+	f = start(t, st, engine.DefaultConfig())
+	if n := next(f.tbl); n == nil || n.PresetID != nil || n.Rules.WinScore != 4 {
+		t.Fatalf("custom rules after a restart: %+v", n)
+	}
+	if err := f.tbl.Start(ctx, StartRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if v := f.tbl.View(); v.Game != nil && (v.Game.Rules.WinScore != 4 || v.Game.PresetID != nil) || v.Next.Rules.WinScore != 4 {
+		t.Errorf("start without rules: %+v %+v", v.Game, v.Next)
+	}
+	if err := f.tbl.Start(ctx, StartRequest{PresetID: short.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if n := next(f.tbl); n.PresetID == nil || *n.PresetID != short.ID {
+		t.Errorf("after a preset: %+v", n)
+	}
+
+	// "preset": the chosen preset, other rules don't change it
+	s := f.tbl.Settings()
+	s.NextRules = NextRulesPreset
+	if err := f.tbl.SetSettings(ctx, s, official.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := next(f.tbl); n.PresetID == nil || *n.PresetID != official.ID {
+		t.Fatalf("fixed preset: %+v", n)
+	}
+	if err := f.tbl.Start(ctx, StartRequest{Rules: &custom}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.tbl.Start(ctx, StartRequest{PresetID: short.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if n := next(f.tbl); n.PresetID == nil || *n.PresetID != official.ID {
+		t.Errorf("fixed preset after other rules: %+v", n)
+	}
+	if p, _ := f.tbl.CurrentPreset(ctx); p.ID != official.ID {
+		t.Errorf("current preset %d", p.ID)
+	}
+	f.stop()
+	f = start(t, st, engine.DefaultConfig())
+	if n := next(f.tbl); n.PresetID == nil || *n.PresetID != official.ID {
+		t.Errorf("fixed preset after a restart: %+v", n)
+	}
+
+	// back to "last": the last game's rules again (the Short game above)
+	s.NextRules = NextRulesLast
+	if err := f.tbl.SetSettings(ctx, s, 0); err != nil {
+		t.Fatal(err)
+	}
+	if n := next(f.tbl); n.PresetID == nil || *n.PresetID != short.ID {
+		t.Errorf("back to last: %+v", n)
+	}
+	bad := s
+	bad.NextRules = "random"
+	if err := f.tbl.SetSettings(ctx, bad, 0); !errors.Is(err, ErrInvalidSettings) {
+		t.Errorf("invalid next_rules: %v", err)
+	}
+}

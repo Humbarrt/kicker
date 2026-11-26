@@ -1,6 +1,6 @@
 <script lang="ts">
-	// "New game": pick the rules – the current preset, another preset (table.preset) or custom
-	// rules for this game only (table.rules) – and start.
+	// "New game": pick the rules – the next game's rules (preselected), another preset
+	// (table.preset) or custom rules (table.rules) – and start.
 	import { api, type Preset, type Rules } from '#lib/api/client.ts';
 	import { live } from '#lib/live.svelte.ts';
 	import { session } from '#lib/session.svelte.ts';
@@ -25,7 +25,19 @@
 			error = '';
 			api.presets().then((p) => {
 				presets = p;
-				choice = String(live.table?.game?.preset_id ?? p[0]?.id ?? '');
+				// preselect the next game's rules (the last game's, or the fixed preset)
+				const next = live.table?.next;
+				if (next && next.preset_id === null && canRules) {
+					const r = next.rules;
+					custom = {
+						win_score: r.win_score,
+						win_by: r.win_by,
+						max_score: r.max_score ?? '',
+						minutes: r.time_limit_s ? r.time_limit_s / 60 : '',
+						tie: r.time_tie
+					};
+					choice = 'custom';
+				} else choice = String(next?.preset_id ?? live.table?.game?.preset_id ?? p[0]?.id ?? '');
 			}).catch(() => {});
 			dialog.showModal();
 		} else if (!open && dialog.open) dialog.close();

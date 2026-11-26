@@ -340,6 +340,7 @@ export type RatingChange = { player_id: number; key: RatingKey; before: number; 
 
 /** The table settings (spec 02 §13, D17) and the current preset. */
 export type TableSettings = {
+	next_rules: 'last' | 'preset'; // the last game's rules, or always the current preset
 	home: SideSettings;
 	away: SideSettings;
 	kickoff_requires: 'both_sides' | 'any_player';

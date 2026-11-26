@@ -16,6 +16,11 @@ const SettingKey = "table_settings"
 // Settings are the table settings of spec 02 §13 and D17. The current preset is stored on its
 // own (store.SettingCurrentPreset) because "Start" with a preset changes it too.
 type Settings struct {
+	// NextRules: "last" – a new game gets the rules the last game was started with (a preset or
+	// custom rules); "preset" – always the current preset, starting a game with other rules
+	// doesn't change it.
+	NextRules string `json:"next_rules"`
+
 	Home SideSettings `json:"home"`
 	Away SideSettings `json:"away"`
 
@@ -40,6 +45,12 @@ type SideSettings struct {
 	Color string `json:"color"` // #rrggbb
 }
 
+// The values of Settings.NextRules.
+const (
+	NextRulesLast   = "last"
+	NextRulesPreset = "preset"
+)
+
 // Default side colors, the same as the web UI's built-in theme.
 const (
 	DefaultHomeColor = "#1f6fd1"
@@ -49,7 +60,8 @@ const (
 // DefaultSettings are the defaults of spec 02 §13.
 func DefaultSettings() Settings {
 	return Settings{
-		Home: SideSettings{Color: DefaultHomeColor}, Away: SideSettings{Color: DefaultAwayColor},
+		NextRules: NextRulesLast,
+		Home:      SideSettings{Color: DefaultHomeColor}, Away: SideSettings{Color: DefaultAwayColor},
 		KickoffRequires: string(engine.KickoffBothSides), KickoffDelayS: 5, FirstBall: string(engine.FirstBallRandom),
 		AfterGoalBall: string(engine.BallConceding), FinishedHoldS: 10,
 		PauseAfterMinutes: 5, SleepAfterMinutes: 3, OnWake: "smart", AbandonAfterHours: 24, CornerClaimTimeoutS: 30,
@@ -66,8 +78,12 @@ var ErrInvalidSettings = errors.New("invalid settings")
 
 func (e *SettingsError) Is(target error) bool { return target == ErrInvalidSettings }
 
-// Normalize trims the names and lower-cases the colors.
+// Normalize trims the names and lower-cases the colors; settings saved before next_rules existed
+// keep the old behaviour (the last game's rules).
 func (s *Settings) Normalize() {
+	if s.NextRules == "" {
+		s.NextRules = NextRulesLast
+	}
 	for _, side := range []*SideSettings{&s.Home, &s.Away} {
 		side.Name = strings.TrimSpace(side.Name)
 		side.Color = strings.ToLower(strings.TrimSpace(side.Color))
@@ -97,6 +113,8 @@ func (s Settings) Validate() error {
 		return false
 	}
 	switch {
+	case !in(s.NextRules, NextRulesLast, NextRulesPreset):
+		return bad("next_rules")
 	case !in(s.KickoffRequires, "both_sides", "any_player"):
 		return bad("kickoff_requires")
 	case s.KickoffDelayS < 0 || s.KickoffDelayS > 60:
