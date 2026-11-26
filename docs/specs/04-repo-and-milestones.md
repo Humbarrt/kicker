@@ -1,7 +1,7 @@
 # Spec 04: Repository layout, tooling + milestones
 
 Status: **Approved v6** (2026-11-23: software-first build order, §7). Turns specs 00–03 into a codebase and a build order.
-Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 in progress (spec 10): tasks 1–6 ✓ (6: bench rig test open).
+Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 in progress (spec 10): tasks 1–7 ✓ (open: 6 on the bench rig, 7 on a Pi 4).
 
 ## 1. One monorepo
 Everything lives in one **public** git repository on the owner's GitHub (`Humbarrt/kicker`, public since 2026-11-26), so the protocol, the server, the Arduino library and the UI always change together, and one version tag produces one release (D15). The old attempts live in a separate `kicker_old` folder and are not part of the repo.
@@ -149,15 +149,9 @@ On the Pi (roughly 3× slower) the background refresh will take about 20 s with 
 
 ## 6. Deployment on the Pi
 - **Hardware:** Raspberry Pi 4 (4 GB). Preferably boots from a USB 3 SSD; a high-endurance SD card is fine to start with.
-- `deploy/install.sh` (run once on Raspberry Pi OS Lite 64-bit):
-  - creates the `kicker` system user, member of `dialout` (serial ports)
-  - installs the binary to `/opt/kicker/kicker` (the previous version is kept for rollback)
-  - data folder `/var/lib/kicker` (database `kicker.db`)
-  - systemd unit with `AmbientCapabilities=CAP_NET_BIND_SERVICE`, so it can use ports 80/443 without root
-  - avahi host name `kicker`
-- After that: `make deploy PI=pi@kicker.local`.
+- **The SD card image** `kicker-<version>-rpi-arm64.img.xz` from the release, written with Raspberry Pi Imager – or **`deploy/install.sh`** on Raspberry Pi OS Lite 64-bit. Both use `kicker install` (spec 10 §5): the `kicker` user (in `dialout`), `/var/lib/kicker` with the binary in `bin/current`, the systemd unit (ports 80/443 without root), the udev rules, host name `kicker`. Guide: `docs/install.md`.
+- After that: updates from Settings → Updates; a binary of your own with `make deploy PI=pi@kicker.local` (copies it and runs `sudo … install`).
 - **HTTPS** with the kicker's own CA (spec 03 §9): the unit runs `kicker serve --addr :80 --tls-addr :443`; port 80 only redirects and serves `/ca.crt` and `/trust`.
-- Later: a ready-made SD card image (pi-gen) so non-technical builders can just flash and boot.
 
 ## 7. Milestones
 Each milestone ends with something you can play with. Tasks inside a milestone are roughly in order.
@@ -231,7 +225,7 @@ The milestone numbers are names, not positions: they stay the same so references
 
 ### M7: Operations (spec 10)
 - Full onboarding wizard, encrypted backups + emergency kit, automatic backup before migrations, signed updates with rollback, firmware updates over USB, SD card image.
-- Tasks and decisions in spec 10 §8–9. Done: 1 (backups: package `backup`, age with `filippo.io/age`, restore by restart, several locations, schedule and retention, the list with restore/download/delete and upload, before migrations, `kicker backup` / `kicker restore`), 2 (Settings → Backups, changing the passphrase), 3 (the full setup wizard, rules for the next game), 4 (signed releases: package `release`, `kicker release`, the release workflow; v0.5.0 published 2026-11-26), 5 (server updates: package `update`, Settings → Updates, `kicker update`), 6 (module firmware over USB: package `firmware`, modules page; the bench rig test is open).
+- Tasks and decisions in spec 10 §8–9. Done: 1 (backups: package `backup`, age with `filippo.io/age`, restore by restart, several locations, schedule and retention, the list with restore/download/delete and upload, before migrations, `kicker backup` / `kicker restore`), 2 (Settings → Backups, changing the passphrase), 3 (the full setup wizard, rules for the next game), 4 (signed releases: package `release`, `kicker release`, the release workflow; v0.5.0 published 2026-11-26), 5 (server updates: package `update`, Settings → Updates, `kicker update`), 6 (module firmware over USB: package `firmware`, modules page; the bench rig test is open), 7 (`kicker install`, the install script, the SD card image job; the Pi 4 test is open).
 
 ### M8: Marketplace (D6)
 - Manifest index in a git repo, firmware updates from it.

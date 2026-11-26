@@ -154,7 +154,7 @@ func TestLocationsAndSchedule(t *testing.T) {
 	must(t, os.Mkdir(filepath.Join(usb, "STICK"), 0o750))
 	now := time.Date(2026, 11, 25, 3, 0, 0, 0, time.Local) // a Wednesday
 	busy := false
-	s := New(Options{Store: st, DataDir: dir, Name: func() string { return "Office Kicker" }, USBRoot: usb,
+	s := New(Options{Store: st, DataDir: dir, Name: func() string { return "Office Kicker" }, USBRoot: usb, Mounted: func(string) bool { return true },
 		Now: func() time.Time { return now }, Busy: func() bool { return busy }})
 	if got := s.Drives(); len(got) != 1 || got[0] != "STICK" {
 		t.Errorf("drives %v", got)

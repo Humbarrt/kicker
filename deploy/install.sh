@@ -1,25 +1,45 @@
 #!/usr/bin/env bash
-# One-time setup of a Raspberry Pi 4 (Raspberry Pi OS Lite 64-bit) for kicker (spec 04 §6).
-# Usage on the Pi:  sudo ./install.sh /path/to/kicker-linux-arm64
+# Installs kicker on Raspberry Pi OS Lite (64-bit) – or updates an installation by hand; the data
+# stays (spec 10 §5). The SD card image is the same system, ready made.
+#
+#   curl -fsSL https://raw.githubusercontent.com/Humbarrt/kicker/main/deploy/install.sh | sudo bash
+#   sudo ./install.sh [kicker-linux-arm64]     # a binary you built yourself (make build-pi)
+#
+# Without a binary it downloads the newest release and checks it against release.json; the
+# signature of release.json is checked too if minisign is installed. The setup itself is
+# `kicker install` (user, data folder, systemd unit, udev rules, host name).
 set -euo pipefail
 
-BIN="${1:?usage: sudo $0 /path/to/kicker-linux-arm64}"
-[[ $EUID -eq 0 ]] || { echo "run as root (sudo)"; exit 1; }
+REPO=Humbarrt/kicker
+[[ $EUID -eq 0 ]] || { echo "run it as root: sudo $0" >&2; exit 1; }
+case $(uname -m) in
+aarch64) arch=arm64 ;;
+x86_64) arch=amd64 ;;
+*) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;;
+esac
 
-id kicker &>/dev/null || useradd --system --home /var/lib/kicker --shell /usr/sbin/nologin kicker
-usermod -aG dialout kicker
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
 
-install -d -o kicker -g kicker -m 0750 /var/lib/kicker
-install -d -m 0755 /opt/kicker
-[[ -f /opt/kicker/kicker ]] && mv /opt/kicker/kicker /opt/kicker/kicker.prev
-install -m 0755 "$BIN" /opt/kicker/kicker
+if [[ $# -ge 1 ]]; then
+	bin=$1
+else
+	base=https://github.com/$REPO/releases/latest/download
+	echo "downloading the newest release"
+	curl -fsSL -o "$tmp/release.json" "$base/release.json"
+	curl -fsSL -o "$tmp/release.json.minisig" "$base/release.json.minisig"
+	curl -fsSL -o "$tmp/kicker-linux-$arch" "$base/kicker-linux-$arch"
+	if command -v minisign >/dev/null; then
+		curl -fsSL -o "$tmp/release.pub" "https://raw.githubusercontent.com/$REPO/main/deploy/release.pub"
+		minisign -Vm "$tmp/release.json" -p "$tmp/release.pub"
+	fi
+	want=$(python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); print(next(s["sha256"] for s in m["server"] if s["name"]==sys.argv[2]))' "$tmp/release.json" "kicker-linux-$arch")
+	echo "$want  $tmp/kicker-linux-$arch" | sha256sum -c --quiet
+	bin=$tmp/kicker-linux-$arch
+fi
+chmod +x "$bin"
 
-install -m 0644 "$(dirname "$0")/kicker.service" /etc/systemd/system/kicker.service
+# kicker.local over mDNS (Raspberry Pi OS Lite usually has it already)
+command -v avahi-daemon >/dev/null || { apt-get update -qq && apt-get install -y -qq avahi-daemon; }
 
-# mDNS host name kicker.local (spec 03 §9)
-apt-get install -y avahi-daemon >/dev/null
-hostnamectl set-hostname kicker
-
-systemctl daemon-reload
-systemctl enable --now kicker
-echo "kicker is running: https://kicker.local (first visit: http://kicker.local/trust)"
+"$bin" install

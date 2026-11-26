@@ -4,6 +4,7 @@ The specs are maintained in the "Kicker" project on claude.ai (`specs/00` … `s
 here when they change, so they are versioned together with the code.
 
 Guides:
+- [Installing](install.md): the SD card image, the install script, updates
 - [Releasing](releasing.md): the release key, cutting a release, test releases
 
 Planned guides:

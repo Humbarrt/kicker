@@ -1,6 +1,6 @@
 # Spec 10: Operations (M7)
 
-Status: **Approved v1** (2026-11-25, decisions in §9). Progress: tasks 1–6 ✓ (6: the bench rig test is open). Builds on D14 (backups), D15 (updates), D18 + spec 03 §8 and §12 (emergency kit, onboarding), spec 01 §9 (module updates) and spec 04 §5–6 (releases, deployment).
+Status: **Approved v1** (2026-11-25, decisions in §9). Progress: tasks 1–7 ✓ (open: 6 on the bench rig, 7 on a Pi 4). Builds on D14 (backups), D15 (updates), D18 + spec 03 §8 and §12 (emergency kit, onboarding), spec 01 §9 (module updates) and spec 04 §5–6 (releases, deployment).
 
 ## 1. Scope
 - The full onboarding wizard (spec 03 §12, steps 1–9).
@@ -85,21 +85,27 @@ Not in scope: network shares built into the server (SMB/NFS clients), WebDAV/S3 
   1. Download into `<data>/firmware/` + size/sha256 check (kept for the next module of the same kind); the file is checked as UF2 (magic numbers, block numbering, one chip family).
   2. Note the module's USB port (sysfs, e.g. `1-1.2`), send `update`; the module acks and reboots into the RP2040/RP2350 bootloader.
   3. The boot drive appears (`2e8a:0003` RP2040, `2e8a:000f` RP2350) – the one on the same USB port, or else the only new one, within 20 s. The file's chip family must match the drive's chip.
-  4. The server writes the UF2 blocks straight to the block device (§9, decision C; `deploy/99-kicker-rp2.rules` lets the `kicker` group write RP2 boot drives and nothing else). Without permission it mounts the drive with `udisksctl` and copies the file.
+  4. The server writes the UF2 blocks straight to the block device (§9, decision C; the udev rules of `kicker install` (§5) let the `kicker` group write RP2 boot drives and nothing else). Without permission it mounts the drive with `udisksctl` and copies the file.
   5. The module reboots and announces the new `fw.ver` within 30 s → done. Otherwise "The firmware update failed" with the reason and the log.
 - **A module waiting in its bootloader** (a failed update, a wrong file, or the BOOTSEL button) is listed on the modules page with its chip and USB port and can be written with a firmware file of the release or an uploaded one – it needs no firmware to accept a `.uf2`.
 - A module can also be updated with an uploaded `.uf2` (own builds), admins only, with a warning.
 - The simulator's goal sensor (`upd: uf2`, `hw: virtual`) runs the same steps without USB, for the UI and tests.
 - To be confirmed on the bench rig (Pico W / RP2040-Zero on the Pi): the raw write (decision C) and the USB-port match.
 
-## 5. SD card image
-- A release also publishes `kicker-<version>-rpi4-arm64.img.xz`: Raspberry Pi OS Lite 64-bit with kicker installed (§9, decision D, how it is built).
-- What the image adds:
-  - the `kicker` user, `/var/lib/kicker` with `bin/current`, the systemd unit, host name `kicker`, avahi
-  - a udev rule: USB drives mount to `/media/kicker/<label>` writable by `kicker` (backups); the RP2 bootloader drive is accessible to `kicker` (firmware updates)
-  - nothing else listens on the network; SSH stays off unless enabled in Raspberry Pi Imager
-- Wi-Fi, user and SSH are set with Raspberry Pi Imager's settings as for any Raspberry Pi OS image.
-- `deploy/install.sh` keeps working on an existing Raspberry Pi OS and does the same.
+## 5. SD card image and installation (`kicker install`, `docs/install.md`)
+- **`kicker install [--root DIR] [--binary F --version V] [--hostname H] [--no-start]`** sets a system up; everything else calls it:
+  - the `kicker` system user and group (`useradd --root`, so it also works on a mounted image), member of `dialout`
+  - `/var/lib/kicker` (0750, kicker) with `bin/kicker-<version>`, `bin/current` → it, `bin/previous` → the version before (when installing again)
+  - the systemd unit, enabled: runs `/var/lib/kicker/bin/current serve --addr :80 --tls-addr :443 --data /var/lib/kicker`, `Restart=always` and `StartLimitIntervalSec=0` (a failed update is rolled back by the next start, so systemd never gives up), port binding without root, `ProtectSystem=strict` with `/var/lib/kicker`, `/media/kicker` and `/mnt` writable (data, USB drives, shares)
+  - the udev rules (`99-kicker.rules`, embedded in the binary): RP2 boot drives writable by the `kicker` group (firmware, §4), never mounted; USB drives with FAT, exFAT or NTFS mounted by `systemd-mount` at `/media/kicker/<label>` (the kernel name without a label), owned by kicker, unmounted when pulled
+  - the host name (`/etc/hostname`, the `127.0.1.1` line of `/etc/hosts`; `hostnamectl` on the running system): `kicker` on an image and on a Raspberry Pi OS still called `raspberrypi`, otherwise kept
+  - removes the layout before M7 (`/opt/kicker`); the data stays
+  - on the running system: reloads systemd and udev, (re)starts the service, warns if avahi is missing
+- The backup service only uses a folder under `/media/kicker` that is a mount point, so a pulled drive's empty folder never gets backups on the SD card.
+- **The image** (decision D): CI's `image` job runs `deploy/image/build.sh` after the release: the newest official Raspberry Pi OS Lite (64-bit), checked against its published sha256, partitions loop-mounted by offset, `kicker-linux-amd64 install --root … --binary kicker-linux-arm64` (nothing runs inside the image, no emulation), compressed with xz, uploaded as `kicker-<version>-rpi-arm64.img.xz` + `.sha256` (Pi 4 and 5). Not listed in `release.json` – it is not an update. `PIOS_URL` pins another base image, `PIOS_IMAGE` uses a local file (testing).
+- Wi-Fi, user and SSH are set with Raspberry Pi Imager's settings as for any Raspberry Pi OS image; the host name `kicker` is preset; nothing else listens on the network.
+- **`deploy/install.sh`** (`curl … | sudo bash`): downloads the newest release (or takes a binary), checks the sha256 from `release.json` (and its signature if `minisign` is installed), installs `avahi-daemon` if missing, runs `kicker install`. Also the way to move a Pi from v0.5.0 – which can't update itself – to the updatable layout.
+- To be tested on a Pi 4: the image's first boot, the install script on a fresh Raspberry Pi OS and on the old layout, a USB stick for backups, an update and a rollback under systemd.
 
 ## 6. Onboarding wizard (spec 03 §12)
 | Step | Status | What |
@@ -125,11 +131,11 @@ All of this is Admin-only (spec 03 §4: backups and updates are system permissio
 4. ✓ Releases: `release.json` + minisign in CI, `kicker release` (keygen, manifest, sign, verify) for local test releases.
 5. ✓ Server updates: check, install, health check, rollback; Settings → Updates (and setup step 8); `kicker update`.
 6. ✓ Firmware updates over USB: bootloader drive detection and UF2 writing, the flow, modules page; open: the test on the bench rig with a Pico W / RP2040-Zero.
-7. SD card image + udev rules + install script changes; tested on a Pi 4.
+7. ✓ SD card image + udev rules + install script changes (`kicker install`); open: the test on a Pi 4.
 8. End-to-end: backup → restore on a fresh server; an update from a locally signed test release, including a forced rollback (Playwright + a Go test).
 
 ## 9. Decisions (owner, 2026-11-25)
-- **A. The binary lives in the data folder** (`<data>/bin/current`), so the service updates itself without root. A compromised service already has all the data.
+- **A. The binary lives in the data folder** (`<data>/bin/current`, set up by `kicker install`, §5), so the service updates itself without root. A compromised service already has all the data.
 - **B. Releases come from `Humbarrt/kicker`, a public repo** (owner, 2026-11-26: published before 1.0 – no token needed; replaces "private until 1.0 with a read-only token").
 - **C. Writing the `.uf2`:** straight to the bootloader's block device (a udev rule gives `kicker` access; no mounting, no root) – confirmed on the bench rig; if that fails, mounting the drive (udisks2 + polkit) and copying the file.
 - **D. The image is the official Raspberry Pi OS Lite image, modified in CI** (loop-mounted, files copied, unit enabled, compressed).

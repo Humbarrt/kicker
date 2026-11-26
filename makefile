@@ -68,7 +68,7 @@ firmware:
 
 deploy: build-pi
 	scp bin/kicker-linux-arm64 $(PI):/tmp/kicker
-	ssh $(PI) 'sudo install -m 0755 /tmp/kicker /opt/kicker/kicker.new && sudo mv /opt/kicker/kicker /opt/kicker/kicker.prev 2>/dev/null; sudo mv /opt/kicker/kicker.new /opt/kicker/kicker && sudo systemctl restart kicker'
+	ssh $(PI) 'sudo /tmp/kicker install && rm /tmp/kicker'
 
 clean:
 	rm -rf bin web/build

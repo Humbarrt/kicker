@@ -111,6 +111,9 @@ type Options struct {
 	Logger   *slog.Logger
 	Now      func() time.Time
 	USBRoot  string // where USB drives are mounted (default /media/kicker)
+	// Mounted reports whether a folder under USBRoot is a mounted drive (default: a mount point;
+	// tests pass any folder).
+	Mounted func(dir string) bool
 }
 
 // Service runs scheduled and on-demand backups and keeps the list.
@@ -126,6 +129,9 @@ func New(o Options) *Service {
 	}
 	if o.Logger == nil {
 		o.Logger = slog.Default()
+	}
+	if o.Mounted == nil {
+		o.Mounted = isMountPoint
 	}
 	if o.USBRoot == "" {
 		o.USBRoot = "/media/kicker"
@@ -294,7 +300,7 @@ func (s *Service) Drives() []string {
 	}
 	out := []string{}
 	for _, e := range es {
-		if e.IsDir() {
+		if e.IsDir() && s.o.Mounted(filepath.Join(s.o.USBRoot, e.Name())) {
 			out = append(out, e.Name())
 		}
 	}
@@ -408,7 +414,7 @@ func (s *Service) copyTo(src string, l Location, file string) error {
 	dir := s.Dir(l)
 	switch l.Kind {
 	case LocUSB:
-		if _, err := os.Stat(dir); err != nil {
+		if _, err := os.Stat(dir); err != nil || !s.o.Mounted(dir) {
 			return fmt.Errorf("drive %q is not plugged in", l.Path)
 		}
 	case LocFolder:

@@ -1,0 +1,17 @@
+# udev rules for the kicker server (spec 10 §2, §4, §5), installed by `kicker install`.
+SUBSYSTEM!="block", GOTO="kicker_end"
+
+# RP2 boot drives (a module rebooted into its bootloader, 2e8a:0003 RP2040, 2e8a:000f RP2350):
+# the kicker group writes new firmware straight to the block device. Never mounted.
+ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="0003|000f", GROUP="kicker", MODE="0660", GOTO="kicker_end"
+
+# USB drives with FAT, exFAT or NTFS: mounted at /media/kicker/<label> (or the kernel name
+# without a label), writable by kicker, for backups. Unmounted when pulled.
+ACTION!="add", GOTO="kicker_end"
+ENV{ID_BUS}!="usb", GOTO="kicker_end"
+ENV{ID_FS_USAGE}!="filesystem", GOTO="kicker_end"
+ENV{ID_FS_TYPE}!="vfat|exfat|ntfs|ntfs3", GOTO="kicker_end"
+ENV{ID_FS_LABEL}=="", RUN+="/usr/bin/systemd-mount --no-block --collect --options=uid=kicker,gid=kicker,umask=0007,noatime $devnode /media/kicker/%k", GOTO="kicker_end"
+RUN+="/usr/bin/systemd-mount --no-block --collect --options=uid=kicker,gid=kicker,umask=0007,noatime $devnode /media/kicker/$env{ID_FS_LABEL}"
+
+LABEL="kicker_end"
