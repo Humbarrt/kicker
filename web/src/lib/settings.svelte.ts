@@ -7,7 +7,7 @@ export type SettingsTab = { href: string; label: string; badge?: number | string
 
 /** What needs an admin's attention: sign-ups, a missing emergency kit, failing backups, an update (header badge). */
 export function settingsAttention(): number {
-	return (session.me?.pending_accounts ?? 0) + (session.me?.needs_kit ? 1 : 0) + (session.me?.backup_problem ? 1 : 0) + (session.me?.update_available ? 1 : 0);
+	return (session.me?.pending_accounts ?? 0) + (session.me?.needs_kit ? 1 : 0) + (session.me?.backup_problem ? 1 : 0) + (session.me?.update_available ? 1 : 0) + (session.me?.firmware_updates ?? 0);
 }
 
 export function settingsTabs(): SettingsTab[] {
@@ -15,7 +15,7 @@ export function settingsTabs(): SettingsTab[] {
 	const pending = session.me?.pending_accounts ?? 0;
 	return [
 		{ href: '/settings/table', label: t('admin.table'), show: admin },
-		{ href: '/settings/modules', label: t('admin.modules'), show: admin },
+		{ href: '/settings/modules', label: t('admin.modules'), show: admin, badge: session.me?.firmware_updates || undefined },
 		{ href: '/settings/coins', label: t('admin.coins'), show: session.can('coins.manage') },
 		{ href: '/settings/groups', label: t('admin.groups'), show: admin },
 		{ href: '/settings/accounts', label: t('admin.accounts'), show: admin, badge: pending || undefined },

@@ -1,0 +1,4 @@
+# RP2 boot drives: a module rebooted into its bootloader shows up as a USB drive (2e8a:0003
+# RP2040, 2e8a:000f RP2350). The kicker service writes the new firmware straight to the block
+# device (spec 10 §4), so the kicker group may write it – nothing else, no mounting.
+SUBSYSTEM=="block", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="0003|000f", GROUP="kicker", MODE="0660"

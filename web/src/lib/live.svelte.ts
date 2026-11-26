@@ -20,6 +20,7 @@ class Live {
 	tournamentRev = $state(0);
 	backupRev = $state(0);
 	updateRev = $state(0);
+	firmwareRev = $state(0);
 
 	#es: EventSource | null = null;
 	#console = new Set<ConsoleListener>();
@@ -41,6 +42,10 @@ class Live {
 		es.addEventListener('modules', () => this.modulesRev++);
 		es.addEventListener('stats', () => this.statsRev++);
 		es.addEventListener('tournament', () => this.tournamentRev++);
+		es.addEventListener('firmware', () => {
+			this.firmwareRev++;
+			void session.refresh(); // admins: the firmware badge
+		});
 		es.addEventListener('update', () => {
 			this.updateRev++;
 			void session.refresh(); // admins: the update badge

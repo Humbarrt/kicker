@@ -65,6 +65,7 @@ export type Me = {
 	needs_kit?: boolean; // admins: no emergency kit made yet
 	backup_problem?: boolean; // admins: a backup target failed, or nothing younger than 48 h
 	update_available?: boolean; // admins: a newer server version can be installed
+	firmware_updates?: number; // admins: modules with a newer firmware
 };
 
 export type PermissionKind = 'on_off' | 'scope' | 'days';
@@ -380,8 +381,34 @@ export type ModuleInfo = {
 	firmware: string;
 	fw_version: string;
 	hardware: string;
+	update: string; // uf2, esptool, none
+	usb_path: string;
 	connected_at: string;
 	caps: CapView[] | null;
+};
+
+/** Module firmware updates (spec 10 §4). */
+export type FirmwareOffer = { uid: string; name: string; current: string; version: string; file: string };
+export type FirmwareJob = {
+	uid: string; // or "drive:<name>"
+	name: string;
+	from: string;
+	to: string; // "" = an uploaded file
+	file: string;
+	step: 'queued' | 'download' | 'bootloader' | 'write' | 'restart' | 'done' | 'failed';
+	error?: string;
+	log: string[];
+	started: string;
+	ended?: string;
+};
+export type BootDrive = { name: string; dev: string; usb_path: string; chip: string };
+export type FirmwareStatus = {
+	release: string;
+	files: { name: string; mf: string; hw: string; version: string }[];
+	offers: FirmwareOffer[];
+	jobs: FirmwareJob[];
+	drives: BootDrive[];
+	busy: boolean;
 };
 
 export type ConsoleLine = {

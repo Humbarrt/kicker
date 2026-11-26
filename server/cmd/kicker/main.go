@@ -30,6 +30,7 @@ import (
 	"github.com/Humbarrt/kicker/server/internal/bus"
 	"github.com/Humbarrt/kicker/server/internal/coins"
 	"github.com/Humbarrt/kicker/server/internal/engine"
+	"github.com/Humbarrt/kicker/server/internal/firmware"
 	"github.com/Humbarrt/kicker/server/internal/modules"
 	"github.com/Humbarrt/kicker/server/internal/modules/virtual"
 	"github.com/Humbarrt/kicker/server/internal/onboarding"
@@ -249,6 +250,7 @@ func serve(args []string) error {
 			switch ev := e.(type) {
 			case modules.ModulesChanged:
 				events.Publish(api.TopicModules, nil)
+				events.Publish(firmware.Topic, nil) // the offers depend on the connected modules
 			case modules.ConsoleEvent:
 				events.Publish(api.TopicConsole, api.ConsoleLineOf(ev))
 			case modules.CapabilityEvent:
@@ -317,6 +319,12 @@ func serve(args []string) error {
 		Restart: requestRestart,
 	})
 	go updater.Run(ctx)
+	firmwareSvc := firmware.New(firmware.Options{Host: host, Releases: updater, DataDir: *dataDir, Bus: events,
+		Busy: func() bool {
+			p := tbl.View().Phase
+			return p == string(engine.PhasePlaying) || p == string(engine.PhasePregame)
+		},
+	})
 	go func() {
 		select {
 		case <-tbl.Ready(): // database open and migrated, the table restored
@@ -326,10 +334,11 @@ func serve(args []string) error {
 	}()
 
 	router := api.NewRouter(api.Options{
-		Backups: backups,
-		Updates: updater,
-		Restart: func() { requestRestart("") },
-		Sim:     *sim, ServerID: serverID, Name: name, DataDir: *dataDir, CA: caOpt, Auth: authSvc, Onboarding: ob,
+		Backups:  backups,
+		Updates:  updater,
+		Firmware: firmwareSvc,
+		Restart:  func() { requestRestart("") },
+		Sim:      *sim, ServerID: serverID, Name: name, DataDir: *dataDir, CA: caOpt, Auth: authSvc, Onboarding: ob,
 		Modules: host, Simulator: simulator, Table: tbl, Players: playerSvc, Coins: coinSvc, Ratings: st, History: st, Stats: stats.Reader{St: st, Cache: statsCache}, Presets: st, Tournaments: tourneys, Bus: events, Done: ctx.Done(),
 	})
 	srv := &http.Server{Addr: *addr, Handler: router, ReadHeaderTimeout: 10 * time.Second}

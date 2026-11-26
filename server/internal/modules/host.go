@@ -670,6 +670,29 @@ func (h *Host) Identify(ctx context.Context, uid string, seconds int) error {
 	return err
 }
 
+// EnterBootloader sends `update`: the module acks and reboots into its bootloader (spec 01 §9).
+func (h *Host) EnterBootloader(ctx context.Context, uid string) error {
+	sess, err := h.session(uid)
+	if err != nil {
+		return err
+	}
+	res, err := sess.Command(ctx, func(id uint32) protocol.Message { return &protocol.Simple{T: protocol.TUpdate, ID: id} })
+	if err == nil && !res.OK {
+		err = fmt.Errorf("%s %s", res.Code, res.Msg)
+	}
+	return err
+}
+
+// VirtualModule returns a virtual module by uid (the simulator's firmware updates), or nil.
+func (h *Host) VirtualModule(uid string) *virtual.Module {
+	for _, vm := range h.opts.Virtual {
+		if vm.UID == uid {
+			return vm
+		}
+	}
+	return nil
+}
+
 // SetAsleep sends `sleep` or `wake` to every online adopted module (spec 01 §9). While the table
 // sleeps, modules that come online get `sleep` too. Errors are logged, not returned: a module
 // that misses it is still reachable and gets the next one.
@@ -794,7 +817,10 @@ func (h *Host) Modules() []ModuleInfo {
 			ConnectedAt: m.connectedAt,
 		}
 		if a := m.announce; a != nil {
-			info.Manifest, info.Firmware, info.FWVersion, info.Hardware = a.MF, a.FW.Name, a.FW.Ver, a.HW
+			info.Manifest, info.Firmware, info.FWVersion, info.Hardware, info.Update = a.MF, a.FW.Name, a.FW.Ver, a.HW, a.Upd
+		}
+		if !m.virtual {
+			info.USBPath = transport.USBPath(m.port)
 		}
 		if info.Name == "" {
 			info.Name = info.Manifest

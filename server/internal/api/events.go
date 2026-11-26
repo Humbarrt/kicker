@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Humbarrt/kicker/server/internal/backup"
+	"github.com/Humbarrt/kicker/server/internal/firmware"
 	"github.com/Humbarrt/kicker/server/internal/update"
 	"net/http"
 	"time"
@@ -47,7 +48,7 @@ func (o Options) eventsRoute(api *gin.RouterGroup) {
 			topics = append(topics, tournaments.TopicTournament)
 		}
 		if account(c).IsAdmin() && !account(c).MustChangePassword {
-			topics = append(topics, TopicModules, TopicConsole, TopicAccounts, backup.Topic, update.Topic)
+			topics = append(topics, TopicModules, TopicConsole, TopicAccounts, backup.Topic, update.Topic, firmware.Topic)
 		}
 		sub := o.Bus.Subscribe(256, topics...)
 		defer sub.Close()

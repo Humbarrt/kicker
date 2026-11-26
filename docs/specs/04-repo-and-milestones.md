@@ -1,7 +1,7 @@
 # Spec 04: Repository layout, tooling + milestones
 
 Status: **Approved v6** (2026-11-23: software-first build order, §7). Turns specs 00–03 into a codebase and a build order.
-Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 in progress (spec 10): tasks 1–5 ✓.
+Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 in progress (spec 10): tasks 1–6 ✓ (6: bench rig test open).
 
 ## 1. One monorepo
 Everything lives in one **public** git repository on the owner's GitHub (`Humbarrt/kicker`, public since 2026-11-26), so the protocol, the server, the Arduino library and the UI always change together, and one version tag produces one release (D15). The old attempts live in a separate `kicker_old` folder and are not part of the repo.
@@ -231,7 +231,7 @@ The milestone numbers are names, not positions: they stay the same so references
 
 ### M7: Operations (spec 10)
 - Full onboarding wizard, encrypted backups + emergency kit, automatic backup before migrations, signed updates with rollback, firmware updates over USB, SD card image.
-- Tasks and decisions in spec 10 §8–9. Done: 1 (backups: package `backup`, age with `filippo.io/age`, restore by restart, several locations, schedule and retention, the list with restore/download/delete and upload, before migrations, `kicker backup` / `kicker restore`), 2 (Settings → Backups, changing the passphrase), 3 (the full setup wizard, rules for the next game), 4 (signed releases: package `release`, `kicker release`, the release workflow; v0.5.0 published 2026-11-26), 5 (server updates: package `update`, Settings → Updates, `kicker update`).
+- Tasks and decisions in spec 10 §8–9. Done: 1 (backups: package `backup`, age with `filippo.io/age`, restore by restart, several locations, schedule and retention, the list with restore/download/delete and upload, before migrations, `kicker backup` / `kicker restore`), 2 (Settings → Backups, changing the passphrase), 3 (the full setup wizard, rules for the next game), 4 (signed releases: package `release`, `kicker release`, the release workflow; v0.5.0 published 2026-11-26), 5 (server updates: package `update`, Settings → Updates, `kicker update`), 6 (module firmware over USB: package `firmware`, modules page; the bench rig test is open).
 
 ### M8: Marketplace (D6)
 - Manifest index in a git repo, firmware updates from it.

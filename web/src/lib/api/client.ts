@@ -43,6 +43,7 @@ import type {
 	BackupsView,
 	UpdateConfig,
 	UpdatesView,
+	FirmwareStatus,
 	BackupConfig,
 	RestoreView,
 	PlayerTournamentResult
@@ -248,6 +249,20 @@ export const api = {
 
 	// modules (admin)
 	modules: () => get<ModuleInfo[]>('/api/modules'),
+	// module firmware (spec 10 §4, admins)
+	firmware: () => get<FirmwareStatus>('/api/firmware'),
+	updateFirmware: (uids: string[]) => post<FirmwareStatus>('/api/firmware/update', { uids }),
+	uploadFirmware: (uid: string, file: File) => {
+		const f = new FormData();
+		f.append('file', file);
+		return post<FirmwareStatus>(`/api/firmware/modules/${enc(uid)}/upload`, f);
+	},
+	flashDrive: (name: string, file: string) => post<FirmwareStatus>(`/api/firmware/drives/${enc(name)}/flash`, { file }),
+	uploadToDrive: (name: string, file: File) => {
+		const f = new FormData();
+		f.append('file', file);
+		return post<FirmwareStatus>(`/api/firmware/drives/${enc(name)}/upload`, f);
+	},
 	console: (uid: string) => get<ConsoleLine[]>(`/api/modules/${enc(uid)}/console`),
 	adopt: (uid: string, name: string, roles: Record<string, string>) =>
 		post<void>(`/api/modules/${enc(uid)}/adopt`, { name, roles }),

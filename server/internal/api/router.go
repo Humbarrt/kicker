@@ -3,6 +3,7 @@ package api
 
 import (
 	"github.com/Humbarrt/kicker/server/internal/backup"
+	"github.com/Humbarrt/kicker/server/internal/firmware"
 	"net/http"
 	"os"
 	"strings"
@@ -62,7 +63,9 @@ type Options struct {
 	Restart func()
 	// Updates checks for and installs server updates (spec 10 §3); nil = no update routes.
 	Updates *update.Service
-	Bus     *bus.Bus // nil = no SSE stream
+	// Firmware updates module firmware (spec 10 §4); nil = no firmware routes.
+	Firmware *firmware.Service
+	Bus      *bus.Bus // nil = no SSE stream
 	// Done ends long-lived responses (SSE) when the server shuts down.
 	Done      <-chan struct{}
 	Heartbeat time.Duration // SSE keep-alive comment interval; default 15 s
@@ -144,6 +147,9 @@ func NewRouter(opts Options) *gin.Engine {
 	}
 	if opts.Updates != nil && opts.Auth != nil {
 		opts.updateRoutes(api)
+	}
+	if opts.Firmware != nil && opts.Auth != nil {
+		opts.firmwareRoutes(api)
 	}
 	if opts.Bus != nil {
 		opts.eventsRoute(api)

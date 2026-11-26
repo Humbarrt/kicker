@@ -34,6 +34,7 @@ type Module struct {
 	FWName    string
 	FWVersion string
 	Hardware  string
+	Update    string // the update method announced (upd); "" = none
 	Caps      []Cap
 	OnCommand CommandFunc // optional; default acks everything
 	OnReady   func()      // optional; called after `ready`, e.g. for the state sync (spec 01 §6)
@@ -49,6 +50,19 @@ type Module struct {
 	config   map[string]map[string]json.RawMessage
 	commands []Received
 	asleep   bool
+}
+
+// Flash simulates a firmware update: the module "reboots" with the new version and announces
+// itself again (the host sees a reboot, spec 01 §5).
+func (m *Module) Flash(version string) {
+	m.mu.Lock()
+	if version != "" {
+		m.FWVersion = version
+	}
+	m.ready = false
+	m.start = time.Now() // the uptime starts again: the host sees a reboot
+	m.mu.Unlock()
+	m.announce()
 }
 
 // Asleep reports whether the module got `sleep` (and no `wake` since).
@@ -68,7 +82,7 @@ type Received struct {
 // GoalSensorModule returns the reference goal sensor: instances "a" and "b".
 func GoalSensorModule(uid string) *Module {
 	return &Module{
-		UID: uid, Manifest: "kicker/goal-sensor", FWName: "kicker-goal-sensor", FWVersion: "sim", Hardware: "virtual",
+		UID: uid, Manifest: "kicker/goal-sensor", FWName: "kicker-goal-sensor", FWVersion: "0.4.0", Hardware: "virtual", Update: "uf2",
 		Caps: []Cap{
 			{Instance: "a", ID: "goal_sensor", Version: 1, CanWake: true},
 			{Instance: "b", ID: "goal_sensor", Version: 1, CanWake: true},
@@ -263,6 +277,12 @@ func (m *Module) Pending() int {
 // --- helpers --------------------------------------------------------------------------
 
 func (m *Module) announce() {
+	m.mu.Lock()
+	fw, upd := m.FWVersion, m.Update
+	m.mu.Unlock()
+	if upd == "" {
+		upd = "none"
+	}
 	caps := make([]protocol.CapEntry, 0, len(m.Caps))
 	for _, c := range m.Caps {
 		e := protocol.CapEntry{I: c.Instance, C: c.ID, CV: c.Version}
@@ -276,7 +296,7 @@ func (m *Module) announce() {
 	}
 	m.write(&protocol.Announce{
 		T: protocol.TAnnounce, V: protocol.Version, UID: m.UID, TS: m.now(),
-		FW: protocol.Firmware{Name: m.FWName, Ver: m.FWVersion}, MF: m.Manifest, HW: m.Hardware, Upd: "none",
+		FW: protocol.Firmware{Name: m.FWName, Ver: fw}, MF: m.Manifest, HW: m.Hardware, Upd: upd,
 		Caps: caps,
 	})
 }

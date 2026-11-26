@@ -125,6 +125,7 @@ type Service struct {
 	started time.Time
 	// fromCurrent reports whether this process runs <data>/bin/current (tests replace it).
 	fromCurrent func() bool
+	releaseTry  time.Time // the last try to load this version's release (Run's goroutine)
 
 	stepMu sync.Mutex
 	step   string
@@ -336,6 +337,7 @@ func (s *Service) Check(ctx context.Context) (Status, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	_ = s.LoadCurrentRelease(ctx, false)
 	avail, err := s.check(ctx)
 	now := s.o.Now()
 	if serr := s.saveStatus(ctx, func(st *Status) {
@@ -819,6 +821,13 @@ func (s *Service) tick(ctx context.Context) {
 	if cfg.Check && now.Sub(st.LastCheck) >= 24*time.Hour {
 		st, _ = s.Check(ctx)
 	}
+	// the firmware of this version: tried at most hourly (GitHub allows 60 calls an hour)
+	if now.Sub(s.releaseTry) >= time.Hour {
+		s.releaseTry = now
+		if err := s.LoadCurrentRelease(ctx, false); err != nil {
+			s.o.Logger.Debug("this version's release", "err", err)
+		}
+	}
 	// a version that failed and was rolled back is not tried again automatically
 	failed := st.Available != nil && st.Last != nil && !st.Last.OK && st.Last.To == st.Available.Version
 	if cfg.Auto && st.Available != nil && !failed && s.inWindow(now) && s.Blocked(ctx) == nil {
@@ -873,4 +882,81 @@ func NewestBackup(dataDir string) string {
 		return ""
 	}
 	return filepath.Join(dataDir, "backups", backup.KindPreUpdate, newest)
+}
+
+// --- the running version's release (its module firmware, spec 10 §4) ------------------------
+
+// SettingRelease caches the running version's verified release.json.
+const SettingRelease = "update_release"
+
+type cachedRelease struct {
+	Version   string `json:"version"`
+	Manifest  string `json:"manifest"`
+	Signature string `json:"signature"`
+}
+
+// CurrentRelease returns the release.json of the running version – the firmware made for this
+// server – from the cache (verified again on every read). nil: not loaded (yet), or a build
+// without updates.
+func (s *Service) CurrentRelease(ctx context.Context) (*release.Manifest, error) {
+	if !s.Enabled() {
+		return nil, nil
+	}
+	var c cachedRelease
+	if ok, err := s.o.Store.GetSetting(ctx, SettingRelease, &c); err != nil || !ok || c.Version != s.o.Version {
+		return nil, err
+	}
+	m, err := release.Verify([]byte(c.Manifest), []byte(c.Signature), s.o.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+// LoadCurrentRelease fetches and caches the running version's release.json (once per version;
+// force: again, e.g. "Check now").
+func (s *Service) LoadCurrentRelease(ctx context.Context, force bool) error {
+	if !s.Enabled() {
+		return nil
+	}
+	if m, _ := s.CurrentRelease(ctx); m != nil && !force {
+		return nil
+	}
+	data, err := s.get(ctx, strings.TrimRight(s.o.API, "/")+"/repos/"+s.o.Repo+"/releases/tags/v"+s.o.Version, 1<<20, "application/vnd.github+json")
+	if err != nil {
+		return err
+	}
+	var rel ghRelease
+	if err := json.Unmarshal(data, &rel); err != nil {
+		return fmt.Errorf("GitHub's answer: %w", err)
+	}
+	urls := map[string]string{}
+	for _, a := range rel.Assets {
+		urls[a.Name] = a.URL
+	}
+	man, err := s.get(ctx, urls[release.ManifestFile], 1<<20, "")
+	if err != nil {
+		return err
+	}
+	sig, err := s.get(ctx, urls[release.SignatureFile], 4<<10, "")
+	if err != nil {
+		return err
+	}
+	m, err := release.Verify(man, sig, s.o.PublicKey)
+	if err != nil {
+		return err
+	}
+	if m.Version != s.o.Version {
+		return fmt.Errorf("release v%s: release.json is for version %s", s.o.Version, m.Version)
+	}
+	if err := s.o.Store.SetSetting(ctx, SettingRelease, cachedRelease{Version: m.Version, Manifest: string(man), Signature: string(sig)}); err != nil {
+		return err
+	}
+	s.publish()
+	return nil
+}
+
+// Download fetches a file of a verified release and checks it (the firmware files).
+func (s *Service) Download(ctx context.Context, a release.Asset, path string) error {
+	return s.download(ctx, a, path)
 }

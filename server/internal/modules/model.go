@@ -39,6 +39,8 @@ type ModuleInfo struct {
 	Firmware    string    `json:"firmware"`
 	FWVersion   string    `json:"fw_version"`
 	Hardware    string    `json:"hardware"`
+	Update      string    `json:"update"`   // how the firmware is updated: uf2, esptool, none
+	USBPath     string    `json:"usb_path"` // the USB port it is plugged into, e.g. 1-1.2 (Linux)
 	ConnectedAt time.Time `json:"connected_at"`
 	Caps        []CapView `json:"caps"`
 }

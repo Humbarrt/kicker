@@ -240,6 +240,8 @@ type MeView struct {
 	BackupProblem bool `json:"backup_problem,omitempty"`
 	// UpdateAvailable: a newer server version can be installed (spec 10 §3).
 	UpdateAvailable bool `json:"update_available,omitempty"`
+	// FirmwareUpdates: modules with a newer firmware in this version's release (spec 10 §4).
+	FirmwareUpdates int `json:"firmware_updates,omitempty"`
 }
 
 // LoginInput is the body of POST /api/auth/login.
@@ -369,6 +371,9 @@ func (o Options) authRoutes(api *gin.RouterGroup) {
 			}
 			if o.Updates != nil {
 				me.UpdateAvailable = o.Updates.UpdateAvailable(ctx)
+			}
+			if o.Firmware != nil {
+				me.FirmwareUpdates = o.Firmware.Count(ctx)
 			}
 		}
 		c.JSON(http.StatusOK, me)

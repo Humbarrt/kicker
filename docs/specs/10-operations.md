@@ -1,6 +1,6 @@
 # Spec 10: Operations (M7)
 
-Status: **Approved v1** (2026-11-25, decisions in §9). Progress: tasks 1–5 ✓. Builds on D14 (backups), D15 (updates), D18 + spec 03 §8 and §12 (emergency kit, onboarding), spec 01 §9 (module updates) and spec 04 §5–6 (releases, deployment).
+Status: **Approved v1** (2026-11-25, decisions in §9). Progress: tasks 1–6 ✓ (6: the bench rig test is open). Builds on D14 (backups), D15 (updates), D18 + spec 03 §8 and §12 (emergency kit, onboarding), spec 01 §9 (module updates) and spec 04 §5–6 (releases, deployment).
 
 ## 1. Scope
 - The full onboarding wizard (spec 03 §12, steps 1–9).
@@ -78,15 +78,19 @@ Not in scope: network shares built into the server (SMB/NFS clients), WebDAV/S3 
 - Testing: `--update-api` points `serve` and `kicker update` at a fake GitHub; `version.CrashAfterStart` (ldflags, never in a release) makes a build fail after opening the database, to force a rollback.
 - v0.5.0, the first release, has no updater yet: it is updated by hand (task 7's install script); every later version updates itself.
 
-## 4. Module firmware updates (spec 01 §9)
-- `release.json` lists the firmware files. A module whose `mf` and `hw` match an entry with a newer version than its `fw.ver` shows "Firmware X.Y.Z available" on the modules page, and admins get a badge; "Update all" updates them one after the other. **Always by hand** (owner, 2026-11-25): a module update makes the table unusable for a moment.
-- Only while the table is idle or asleep (never during a game).
+## 4. Module firmware updates (spec 01 §9, package `firmware`)
+- **Which firmware:** the release of the **running** server version (its `release.json`, fetched by tag, verified and cached; reloaded at most hourly and on "Check now"). Firmware always comes with the server it was built for; a server update brings the next firmware. A module whose `mf` and `hw` match an entry with a newer `fw_ver` than its `fw.ver` (and that announces `upd: uf2`) shows "Firmware X.Y.Z available" on the modules page, and admins get a badge (Settings → Modules); "Update all" updates them one after the other. **Always by hand** (owner, 2026-11-25): a module update makes the table unusable for a moment.
+- Only while the table is idle or asleep (not while a game is played or about to start).
 - **Flow (`upd: uf2`):**
-  1. Download + sha256 check.
-  2. Send `update`; the module acks and reboots into the RP2040/RP2350 bootloader.
-  3. The bootloader appears as a USB drive (`2e8a:0003` RP2040, `2e8a:000f` RP2350). The server writes the `.uf2` blocks to it (§9, decision C).
-  4. The module reboots and announces the new `fw.ver` within 30 s → done. Otherwise: "Update failed" with the log; a module stuck in the bootloader is shown as such and can be flashed again (it needs no firmware to accept a `.uf2`).
+  1. Download into `<data>/firmware/` + size/sha256 check (kept for the next module of the same kind); the file is checked as UF2 (magic numbers, block numbering, one chip family).
+  2. Note the module's USB port (sysfs, e.g. `1-1.2`), send `update`; the module acks and reboots into the RP2040/RP2350 bootloader.
+  3. The boot drive appears (`2e8a:0003` RP2040, `2e8a:000f` RP2350) – the one on the same USB port, or else the only new one, within 20 s. The file's chip family must match the drive's chip.
+  4. The server writes the UF2 blocks straight to the block device (§9, decision C; `deploy/99-kicker-rp2.rules` lets the `kicker` group write RP2 boot drives and nothing else). Without permission it mounts the drive with `udisksctl` and copies the file.
+  5. The module reboots and announces the new `fw.ver` within 30 s → done. Otherwise "The firmware update failed" with the reason and the log.
+- **A module waiting in its bootloader** (a failed update, a wrong file, or the BOOTSEL button) is listed on the modules page with its chip and USB port and can be written with a firmware file of the release or an uploaded one – it needs no firmware to accept a `.uf2`.
 - A module can also be updated with an uploaded `.uf2` (own builds), admins only, with a warning.
+- The simulator's goal sensor (`upd: uf2`, `hw: virtual`) runs the same steps without USB, for the UI and tests.
+- To be confirmed on the bench rig (Pico W / RP2040-Zero on the Pi): the raw write (decision C) and the USB-port match.
 
 ## 5. SD card image
 - A release also publishes `kicker-<version>-rpi4-arm64.img.xz`: Raspberry Pi OS Lite 64-bit with kicker installed (§9, decision D, how it is built).
@@ -120,7 +124,7 @@ All of this is Admin-only (spec 03 §4: backups and updates are system permissio
 3. ✓ Onboarding steps 2, 5–9 (the update toggles of step 8 come with task 5).
 4. ✓ Releases: `release.json` + minisign in CI, `kicker release` (keygen, manifest, sign, verify) for local test releases.
 5. ✓ Server updates: check, install, health check, rollback; Settings → Updates (and setup step 8); `kicker update`.
-6. Firmware updates over USB: bootloader drive detection and UF2 writing, the flow, modules page; tested on the bench rig with a Pico W / RP2040-Zero.
+6. ✓ Firmware updates over USB: bootloader drive detection and UF2 writing, the flow, modules page; open: the test on the bench rig with a Pico W / RP2040-Zero.
 7. SD card image + udev rules + install script changes; tested on a Pi 4.
 8. End-to-end: backup → restore on a fresh server; an update from a locally signed test release, including a forced rollback (Playwright + a Go test).
 
