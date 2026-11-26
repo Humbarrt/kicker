@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Humbarrt/kicker/server/internal/backup"
 	"net/http"
 	"time"
 
@@ -45,7 +46,7 @@ func (o Options) eventsRoute(api *gin.RouterGroup) {
 			topics = append(topics, tournaments.TopicTournament)
 		}
 		if account(c).IsAdmin() && !account(c).MustChangePassword {
-			topics = append(topics, TopicModules, TopicConsole, TopicAccounts)
+			topics = append(topics, TopicModules, TopicConsole, TopicAccounts, backup.Topic)
 		}
 		sub := o.Bus.Subscribe(256, topics...)
 		defer sub.Close()

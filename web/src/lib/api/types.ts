@@ -63,6 +63,7 @@ export type Me = {
 	language: string;
 	pending_accounts?: number; // admins: sign-ups waiting
 	needs_kit?: boolean; // admins: no emergency kit made yet
+	backup_problem?: boolean; // admins: a backup target failed, or nothing younger than 48 h
 };
 
 export type PermissionKind = 'on_off' | 'scope' | 'days';
@@ -599,4 +600,66 @@ export interface PlayerTournamentResult {
 	place: number;
 	replaced?: boolean;
 	dropped?: boolean;
+}
+
+// --- backups (spec 10 §2) ---
+export type LocationKind = 'local' | 'usb' | 'folder';
+export interface BackupLocation {
+	id: string;
+	name: string;
+	kind: LocationKind;
+	/** usb: the drive's name; folder: an absolute path; local: "". */
+	path: string;
+	enabled: boolean;
+}
+export interface BackupConfig {
+	schedule: 'daily' | 'days' | 'manual';
+	/** 0 = Sunday … 6 = Saturday */
+	days?: number[];
+	/** HH:MM, or "" for the automatic time */
+	time: string;
+	/** Retention of automatic backups: the newest `copies`, or with keep_days the ones younger than that. */
+	copies: number;
+	keep_days?: number;
+	locations: BackupLocation[];
+}
+export interface BackupResult {
+	at: string;
+	file?: string;
+	error?: string;
+	last_ok?: string;
+}
+export type BackupKindName = 'auto' | 'manual' | 'pre-update' | 'pre-migration' | 'uploaded';
+export interface BackupEntry {
+	file: string;
+	kicker: string;
+	own: boolean;
+	created: string;
+	kind: BackupKindName;
+	size: number;
+	locations: string[];
+}
+export interface BackupManifest {
+	format: number;
+	name: string;
+	server_id: string;
+	version: string;
+	schema: number;
+	created: string;
+	files: { path: string; size: number }[];
+}
+export interface BackupsView {
+	config: BackupConfig;
+	status: { locations: Record<string, BackupResult>; last_run?: string };
+	backups: BackupEntry[];
+	auto_time: string;
+	next_run: string | null;
+	drives: string[];
+	local: string;
+	pending: BackupManifest | null;
+	problem: boolean;
+}
+export interface RestoreView {
+	manifest: BackupManifest;
+	restarting: boolean;
 }

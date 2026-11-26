@@ -167,3 +167,29 @@ und diese Passphrase angeben. Alte Backups behalten die Passphrase, mit der sie 
 Ohne beides: auf dem Pi selbst legt „kicker admin create <name>“ einen neuen Admin an.
 `},
 }
+
+// MinPassphrase is the shortest own passphrase (spec 03 §8).
+const MinPassphrase = 16
+
+// ErrShortPassphrase: an own passphrase under MinPassphrase characters.
+var ErrShortPassphrase = errors.New("the passphrase needs at least 16 characters")
+
+// SetPassphrase replaces the backup passphrase: p, or new words if p is empty. Only new backups
+// use it; older ones still open with the old one (spec 03 §8).
+func SetPassphrase(dataDir, p string) (string, error) {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		var err error
+		if p, err = auth.RandomWords(PassphraseWords); err != nil {
+			return "", err
+		}
+	} else if len([]rune(p)) < MinPassphrase {
+		return "", ErrShortPassphrase
+	}
+	path := filepath.Join(dataDir, PassphraseFile)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(p+"\n"), 0o600); err != nil {
+		return "", err
+	}
+	return p, os.Rename(tmp, path)
+}

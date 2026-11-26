@@ -236,6 +236,8 @@ type MeView struct {
 	// For admins: sign-ups waiting for approval, and whether an emergency kit was ever made.
 	PendingAccounts int  `json:"pending_accounts,omitempty"`
 	NeedsKit        bool `json:"needs_kit,omitempty"`
+	// BackupProblem: a backup target failed, or has no backup younger than 48 h (spec 10 §2).
+	BackupProblem bool `json:"backup_problem,omitempty"`
 }
 
 // LoginInput is the body of POST /api/auth/login.
@@ -359,6 +361,9 @@ func (o Options) authRoutes(api *gin.RouterGroup) {
 			me.PendingAccounts, _ = o.Auth.PendingCount(ctx)
 			if t, err := o.Auth.RecoveryKeyCreated(ctx); err == nil && t == nil {
 				me.NeedsKit = true
+			}
+			if o.Backups != nil {
+				me.BackupProblem = o.Backups.Problem(ctx)
 			}
 		}
 		c.JSON(http.StatusOK, me)

@@ -26,6 +26,7 @@ import (
 
 	"github.com/Humbarrt/kicker/server/internal/api"
 	"github.com/Humbarrt/kicker/server/internal/auth"
+	"github.com/Humbarrt/kicker/server/internal/backup"
 	"github.com/Humbarrt/kicker/server/internal/bus"
 	"github.com/Humbarrt/kicker/server/internal/coins"
 	"github.com/Humbarrt/kicker/server/internal/engine"
@@ -57,6 +58,10 @@ func main() {
 		err = admin(args)
 	case "loadtest":
 		err = loadtestCmd(args)
+	case "backup":
+		err = backupCmd(args)
+	case "restore":
+		err = restoreCmd(args)
 	case "version":
 		fmt.Printf("kicker %s (%s), updates enabled: %v\n", version.Version, version.Commit, version.UpdatesEnabled())
 	case "-h", "--help", "help":
@@ -69,10 +74,22 @@ func main() {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
 	}
+	if reexec != "" {
+		// A restore (or an update) asked for a restart: the same process id, so systemd keeps
+		// watching it (spec 10 §2–3).
+		slog.Info("restarting", "binary", reexec)
+		if err := syscall.Exec(reexec, os.Args, os.Environ()); err != nil {
+			slog.Error("restart", "err", err)
+			os.Exit(1)
+		}
+	}
 }
 
+// reexec is the binary serve asked to be restarted with ("" = just exit).
+var reexec string
+
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: kicker <serve|monitor|admin|loadtest|version> [flags]\n       kicker admin <create|set-password|reset-code> [--data DIR] <username>")
+	fmt.Fprintln(os.Stderr, "usage: kicker <serve|monitor|admin|loadtest|backup|restore|version> [flags]\n       kicker admin <create|set-password|reset-code> [--data DIR] <username>")
 }
 
 func serve(args []string) error {
@@ -84,6 +101,7 @@ func serve(args []string) error {
 	sim := fs.Bool("sim", false, "add virtual modules (simulator); real serial modules still work")
 	noSerial := fs.Bool("no-serial", false, "don't scan serial ports for modules")
 	dev := fs.Bool("dev", false, "development mode (verbose logs, gin debug)")
+	usbRoot := fs.String("usb-root", "/media/kicker", "where USB drives are mounted (backup targets)")
 	_ = fs.Parse(args)
 
 	level := slog.LevelInfo
@@ -101,7 +119,22 @@ func serve(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	st, err := store.Open(ctx, filepath.Join(*dataDir, "kicker.db"))
+	// A restore staged before the restart is swapped in before the database opens (spec 10 §2).
+	if m, err := backup.ApplyPending(*dataDir); err != nil {
+		return fmt.Errorf("restoring the backup: %w", err)
+	} else if m != nil {
+		slog.Info("backup restored", "name", m.Name, "created", m.Created, "version", m.Version)
+	}
+	// An existing database is backed up before it is migrated (D14).
+	st, err := store.OpenWith(ctx, filepath.Join(*dataDir, "kicker.db"), store.OpenOptions{
+		BeforeMigrate: func(ctx context.Context, s *store.Store, from, to int) error {
+			path, err := backup.Before(ctx, s, *dataDir, "pre-migration")
+			if path != "" {
+				slog.Info("backup before migrating the database", "from", from, "to", to, "file", path)
+			}
+			return err
+		},
+	})
 	if err != nil {
 		return err
 	}
@@ -243,7 +276,25 @@ func serve(args []string) error {
 		go ca.Run(ctx.Done(), 10*time.Minute) // new addresses, renewal
 	}
 
+	backups := backup.New(backup.Options{Store: st, DataDir: *dataDir, ServerID: serverID, Bus: events, USBRoot: *usbRoot,
+		Name: func() string {
+			var n string
+			_, _ = st.GetSetting(ctx, store.SettingName, &n)
+			return n
+		},
+		Busy:  func() bool { return tbl.View().Phase == string(engine.PhasePlaying) },
+		Ready: ob.Done})
+	go backups.Run(ctx)
+	restart := make(chan struct{}, 1)
+
 	router := api.NewRouter(api.Options{
+		Backups: backups,
+		Restart: func() {
+			select {
+			case restart <- struct{}{}:
+			default:
+			}
+		},
 		Sim: *sim, ServerID: serverID, Name: name, DataDir: *dataDir, CA: caOpt, Auth: authSvc, Onboarding: ob,
 		Modules: host, Simulator: simulator, Table: tbl, Players: playerSvc, Coins: coinSvc, Ratings: st, History: st, Stats: stats.Reader{St: st, Cache: statsCache}, Presets: st, Tournaments: tourneys, Bus: events, Done: ctx.Done(),
 	})
@@ -275,14 +326,29 @@ func serve(args []string) error {
 		return err // the table could not be restored
 	case <-ctx.Done():
 		slog.Info("shutting down")
+	case <-restart:
+		slog.Info("shutting down for a restart")
+		if reexec, err = os.Executable(); err != nil {
+			return err
+		}
 	}
+	stop() // ends the live streams (they wait on ctx), so Shutdown doesn't wait for browsers
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	err = srv.Shutdown(shutdownCtx)
 	if tlsSrv != nil {
 		err = errors.Join(err, tlsSrv.Shutdown(shutdownCtx))
 	}
-	stop()
+	if errors.Is(err, context.DeadlineExceeded) {
+		// Requests still running after 5 s are cut off; a restart must not fail because of them.
+		slog.Warn("requests cut off at shutdown")
+		err = errors.Join(srv.Close(), func() error {
+			if tlsSrv != nil {
+				return tlsSrv.Close()
+			}
+			return nil
+		}())
+	}
 	<-tableDone // the last events are saved before the database closes
 	return err
 }

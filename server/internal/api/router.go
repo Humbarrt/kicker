@@ -2,6 +2,7 @@
 package api
 
 import (
+	"github.com/Humbarrt/kicker/server/internal/backup"
 	"net/http"
 	"os"
 	"strings"
@@ -54,7 +55,11 @@ type Options struct {
 	Presets   Presets // nil = no preset routes
 	// Tournaments runs tournaments (spec 09); nil = no tournament routes.
 	Tournaments *tournaments.Service
-	Bus         *bus.Bus // nil = no SSE stream
+	// Backups makes and restores backups (spec 10 §2); nil = no backup routes.
+	Backups *backup.Service
+	// Restart restarts the server (after a restore is staged); nil = not possible here.
+	Restart func()
+	Bus     *bus.Bus // nil = no SSE stream
 	// Done ends long-lived responses (SSE) when the server shuts down.
 	Done      <-chan struct{}
 	Heartbeat time.Duration // SSE keep-alive comment interval; default 15 s
@@ -130,6 +135,9 @@ func NewRouter(opts Options) *gin.Engine {
 	}
 	if opts.Tournaments != nil {
 		opts.tournamentRoutes(api)
+	}
+	if opts.Backups != nil && opts.Auth != nil {
+		opts.backupRoutes(api)
 	}
 	if opts.Bus != nil {
 		opts.eventsRoute(api)

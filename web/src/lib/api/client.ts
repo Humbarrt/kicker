@@ -40,6 +40,9 @@ import type {
 	TournamentOption,
 	TournamentSetupInput,
 	TournamentRules,
+	BackupsView,
+	BackupConfig,
+	RestoreView,
 	PlayerTournamentResult
 } from './types.ts';
 
@@ -62,10 +65,11 @@ export class ApiError extends Error {
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
 	let res: Response;
 	try {
+		const form = body instanceof FormData; // uploads: the browser sets the multipart type
 		res = await fetch(path, {
 			method,
-			headers: body === undefined ? { Accept: 'application/json' } : { Accept: 'application/json', 'Content-Type': 'application/json' },
-			body: body === undefined ? undefined : JSON.stringify(body)
+			headers: body === undefined || form ? { Accept: 'application/json' } : { Accept: 'application/json', 'Content-Type': 'application/json' },
+			body: body === undefined ? undefined : form ? body : JSON.stringify(body)
 		});
 	} catch {
 		throw new ApiError(0, 'unreachable', 'server not reachable');
@@ -93,6 +97,28 @@ const del = <T>(p: string) => request<T>('DELETE', p);
 const enc = encodeURIComponent;
 
 export const api = {
+	// backups (spec 10 §2, admins)
+	backups: () => get<BackupsView>('/api/backups'),
+	setBackupConfig: (c: BackupConfig) => put<BackupsView>('/api/backups/config', c),
+	runBackup: () => post<BackupsView>('/api/backups/run'),
+	backupFileUrl: (file: string, location = '') =>
+		`/api/backups/files/${enc(file)}${location ? '?location=' + enc(location) : ''}`,
+	deleteBackup: (file: string, location = '') =>
+		del<BackupsView>(`/api/backups/files/${enc(file)}${location ? '?location=' + enc(location) : ''}`),
+	restoreStored: (file: string, passphrase = '') => post<RestoreView>(`/api/backups/files/${enc(file)}/restore`, { passphrase }),
+	uploadBackup: (file: File) => {
+		const f = new FormData();
+		f.append('file', file);
+		return post<{ file: string }>('/api/backups/upload', f);
+	},
+	restoreBackup: (file: File, passphrase: string, onboarding = false) => {
+		const f = new FormData();
+		f.append('file', file);
+		f.append('passphrase', passphrase);
+		return post<RestoreView>(onboarding ? '/api/onboarding/restore' : '/api/backups/restore', f);
+	},
+	changePassphrase: (password: string, passphrase: string) => post<{ passphrase: string }>('/api/backups/passphrase', { password, passphrase }),
+
 	// tournaments (spec 09)
 	tournaments: () => get<TournamentSummary[]>('/api/tournaments'),
 	tournament: (id: number) => get<TournamentDetail>(`/api/tournaments/${id}`),

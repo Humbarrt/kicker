@@ -1,7 +1,7 @@
 # Spec 04: Repository layout, tooling + milestones
 
 Status: **Approved v6** (2026-11-23: software-first build order, §7). Turns specs 00–03 into a codebase and a build order.
-Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's).
+Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 in progress (spec 10): tasks 1–2 ✓.
 
 ## 1. One monorepo
 Everything lives in one **private** git repository on the owner's GitHub (`Humbarrt/kicker`), so the protocol, the server, the Arduino library and the UI always change together, and one version tag produces one release (D15). The old attempts live in a separate `kicker_old` folder and are not part of the repo.
@@ -229,8 +229,9 @@ The milestone numbers are names, not positions: they stay the same so references
 6. ✓ Changing a running tournament (spec 09 §10–11): replacing players, dropouts in every format (walkovers, annulled or forfeits, not drawn any more; a property test drops and replaces at random in every format), rename and rules of later stages, conflicts after edits and the rebuild, finished tournaments frozen and reopened by a void. No manual results: the table stands on its own.
 7. ✓ Load: a 64-team double knockout and a 40-player Monster DYP played to the end in `kicker loadtest` (`--tournament-teams`, `--monster-players`; budgets in §4); e2e test of a small knockout from the setup page to the podium (`05-tournament.spec.ts`).
 
-### M7: Operations
+### M7: Operations (spec 10)
 - Full onboarding wizard, encrypted backups + emergency kit, automatic backup before migrations, signed updates with rollback, firmware updates over USB, SD card image.
+- Tasks and decisions in spec 10 §8–9. Done: 1 (backups: package `backup`, age with `filippo.io/age`, restore by restart, several locations, schedule and retention, the list with restore/download/delete and upload, before migrations, `kicker backup` / `kicker restore`), 2 (Settings → Backups, changing the passphrase).
 
 ### M8: Marketplace (D6)
 - Manifest index in a git repo, firmware updates from it.

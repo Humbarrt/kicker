@@ -31,10 +31,25 @@ type Store struct {
 	w    *sql.DB
 	r    *sql.DB
 	now  func() time.Time
+
+	beforeMigrate func(ctx context.Context, s *Store, from, to int) error
 }
 
 // Open opens (or creates) the database file and applies pending migrations.
 func Open(ctx context.Context, path string) (*Store, error) {
+	return OpenWith(ctx, path, OpenOptions{})
+}
+
+// OpenOptions are hooks for Open.
+type OpenOptions struct {
+	// BeforeMigrate runs when an existing database (schema from > 0) is about to be migrated to
+	// a newer schema, with the store open – the automatic backup (D14, spec 10 §2). An error
+	// stops the start: nothing has been changed yet.
+	BeforeMigrate func(ctx context.Context, s *Store, from, to int) error
+}
+
+// OpenWith is Open with hooks.
+func OpenWith(ctx context.Context, path string, o OpenOptions) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return nil, err
 	}
@@ -68,7 +83,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	}
 	r.SetMaxOpenConns(4)
 
-	s := &Store{path: path, w: w, r: r, now: time.Now}
+	s := &Store{path: path, w: w, r: r, now: time.Now, beforeMigrate: o.BeforeMigrate}
 	if err := s.migrate(ctx); err != nil {
 		s.Close()
 		return nil, fmt.Errorf("migrate %s: %w", path, err)
@@ -141,8 +156,8 @@ func loadMigrations() ([]migration, error) {
 	return out, nil
 }
 
-// migrate applies all pending migrations, each in its own transaction (forward only).
-// TODO(M7): automatic backup before applying migrations to an existing database (D14).
+// migrate applies all pending migrations, each in its own transaction (forward only). An
+// existing database is backed up first (OpenOptions.BeforeMigrate).
 func (s *Store) migrate(ctx context.Context) error {
 	if _, err := s.w.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
 		version    INTEGER PRIMARY KEY,
@@ -164,6 +179,11 @@ func (s *Store) migrate(ctx context.Context) error {
 	}
 	if current > len(all) {
 		return fmt.Errorf("database schema v%d is newer than this server (v%d) – update the server", current, len(all))
+	}
+	if current > 0 && current < len(all) && s.beforeMigrate != nil {
+		if err := s.beforeMigrate(ctx, s, current, len(all)); err != nil {
+			return fmt.Errorf("before migrating v%d → v%d: %w", current, len(all), err)
+		}
 	}
 	for _, m := range all[current:] {
 		if err := s.apply(ctx, m); err != nil {
