@@ -1,7 +1,7 @@
 # Spec 04: Repository layout, tooling + milestones
 
 Status: **Approved v6** (2026-11-23: software-first build order, §7). Turns specs 00–03 into a codebase and a build order.
-Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 in progress (spec 10): tasks 1–7 ✓ (open: 6 on the bench rig, 7 on a Pi 4).
+Progress: **M1 ✓** (2026-11-23). M3: tasks 1–12 ✓; open: the load test on the Pi. M6: tasks 1–7 ✓; open: the load test on the Pi (with M3's). M7 (spec 10): tasks 1–8 ✓; open: the firmware test on the bench rig and a real update on the Pi 4.
 
 ## 1. One monorepo
 Everything lives in one **public** git repository on the owner's GitHub (`Humbarrt/kicker`, public since 2026-11-26), so the protocol, the server, the Arduino library and the UI always change together, and one version tag produces one release (D15). The old attempts live in a separate `kicker_old` folder and are not part of the repo.
@@ -97,7 +97,7 @@ kicker/
 | Store | real SQLite in a temp folder: migrations from scratch and reopen, constraints (CHECK, unique roles, cascades), concurrent writers and readers |
 | API | `httptest` with the real router and a temp DB; the permissions of spec 03 §4 tested per route, including Anybody grants and the Admin-only system routes |
 | Firmware library | PlatformIO `native` environment: protocol core, `BeamDetector`, component hooks – plain C++ tests on the PC |
-| End to end | Playwright against `kicker serve --sim` (from milestone 3 on) |
+| End to end | Playwright against `kicker serve --sim` (from milestone 3 on); `server/e2e`: the real binary updated from a locally signed release and rolled back (M7) |
 | Load | `kicker loadtest`: generates 100k games **through the real engine** into a DB, then measures the budgets below |
 
 **Load test budgets**, measured on the **Pi 4 (4 GB)** before each release (`make loadtest`); CI runs a 300-game version as a Go test, and the browser tests (`make e2e`):
@@ -225,7 +225,7 @@ The milestone numbers are names, not positions: they stay the same so references
 
 ### M7: Operations (spec 10)
 - Full onboarding wizard, encrypted backups + emergency kit, automatic backup before migrations, signed updates with rollback, firmware updates over USB, SD card image.
-- Tasks and decisions in spec 10 §8–9. Done: 1 (backups: package `backup`, age with `filippo.io/age`, restore by restart, several locations, schedule and retention, the list with restore/download/delete and upload, before migrations, `kicker backup` / `kicker restore`), 2 (Settings → Backups, changing the passphrase), 3 (the full setup wizard, rules for the next game), 4 (signed releases: package `release`, `kicker release`, the release workflow; v0.5.0 published 2026-11-26), 5 (server updates: package `update`, Settings → Updates, `kicker update`), 6 (module firmware over USB: package `firmware`, modules page; the bench rig test is open), 7 (`kicker install`, the install script, the SD card image job; the Pi 4 test is open).
+- Tasks and decisions in spec 10 §8–9. Done: 1 (backups: package `backup`, age with `filippo.io/age`, restore by restart, several locations, schedule and retention, the list with restore/download/delete and upload, before migrations, `kicker backup` / `kicker restore`), 2 (Settings → Backups, changing the passphrase), 3 (the full setup wizard, rules for the next game), 4 (signed releases: package `release`, `kicker release`, the release workflow; v0.5.0 published 2026-11-26), 5 (server updates: package `update`, Settings → Updates, `kicker update`), 6 (module firmware over USB: package `firmware`, modules page; the bench rig test is open), 7 (`kicker install`, the install script, the SD card image job; v0.6.0's image runs on the Pi 4), 8 (end-to-end tests: backup → restore on a new kicker, update and rollback).
 
 ### M8: Marketplace (D6)
 - Manifest index in a git repo, firmware updates from it.

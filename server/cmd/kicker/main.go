@@ -111,6 +111,7 @@ func serve(args []string) error {
 	dev := fs.Bool("dev", false, "development mode (verbose logs, gin debug)")
 	usbRoot := fs.String("usb-root", "/media/kicker", "where USB drives are mounted (backup targets)")
 	updateAPI := fs.String("update-api", "", "GitHub API base URL for update checks (testing; default https://api.github.com)")
+	healthDelay := fs.Duration("update-health-delay", 60*time.Second, "how long a new version must run before an update counts as done (testing)")
 	_ = fs.Parse(args)
 
 	level := slog.LevelInfo
@@ -314,7 +315,7 @@ func serve(args []string) error {
 		default:
 		}
 	}
-	updater := update.New(update.Options{Store: st, DataDir: *dataDir, Bus: events, API: *updateAPI,
+	updater := update.New(update.Options{Store: st, DataDir: *dataDir, Bus: events, API: *updateAPI, HealthDelay: *healthDelay,
 		Busy:    func() bool { return tbl.View().Phase == string(engine.PhasePlaying) },
 		Ready:   ob.Done,
 		Time:    func() string { return backups.Time(ctx) },

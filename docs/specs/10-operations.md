@@ -1,6 +1,6 @@
 # Spec 10: Operations (M7)
 
-Status: **Approved v1** (2026-11-25, decisions in §9). Progress: tasks 1–7 ✓ (open: 6 on the bench rig, 7 on a Pi 4). Builds on D14 (backups), D15 (updates), D18 + spec 03 §8 and §12 (emergency kit, onboarding), spec 01 §9 (module updates) and spec 04 §5–6 (releases, deployment).
+Status: **Approved v1** (2026-11-25, decisions in §9). Progress: tasks 1–8 ✓ (open: 6 on the bench rig; 7 on a Pi 4: the image boots to the wizard and USB backups work, a real update is still to be tried). Builds on D14 (backups), D15 (updates), D18 + spec 03 §8 and §12 (emergency kit, onboarding), spec 01 §9 (module updates) and spec 04 §5–6 (releases, deployment).
 
 ## 1. Scope
 - The full onboarding wizard (spec 03 §12, steps 1–9).
@@ -105,7 +105,7 @@ Not in scope: network shares built into the server (SMB/NFS clients), WebDAV/S3 
 - **The image** (decision D): CI's `image` job runs `deploy/image/build.sh` after the release: the newest official Raspberry Pi OS Lite (64-bit), checked against its published sha256, partitions loop-mounted by offset, `kicker-linux-amd64 install --root … --binary kicker-linux-arm64` (nothing runs inside the image, no emulation), compressed with xz, uploaded as `kicker-<version>-rpi-arm64.img.xz` + `.sha256` (Pi 4 and 5). Not listed in `release.json` – it is not an update. `PIOS_URL` pins another base image, `PIOS_IMAGE` uses a local file (testing).
 - Wi-Fi, user and SSH are set with Raspberry Pi Imager's settings as for any Raspberry Pi OS image; the host name `kicker` is preset; nothing else listens on the network.
 - **`deploy/install.sh`** (`curl … | sudo bash`): downloads the newest release (or takes a binary), checks the sha256 from `release.json` (and its signature if `minisign` is installed), installs `avahi-daemon` if missing, runs `kicker install`. Also the way to move a Pi from v0.5.0 – which can't update itself – to the updatable layout.
-- To be tested on a Pi 4: the image's first boot, the install script on a fresh Raspberry Pi OS and on the old layout, a USB stick for backups, an update and a rollback under systemd.
+- Tested on a Pi 4 (2026-11-26/27): v0.6.0's image boots to the setup wizard; a USB stick appears as a backup location, gets the backups and is reported as not plugged in when pulled. Still to try: the install script on a fresh Raspberry Pi OS and on the old layout, an update (and a rollback) under systemd.
 
 ## 6. Onboarding wizard (spec 03 §12)
 | Step | Status | What |
@@ -132,7 +132,7 @@ All of this is Admin-only (spec 03 §4: backups and updates are system permissio
 5. ✓ Server updates: check, install, health check, rollback; Settings → Updates (and setup step 8); `kicker update`.
 6. ✓ Firmware updates over USB: bootloader drive detection and UF2 writing, the flow, modules page; open: the test on the bench rig with a Pico W / RP2040-Zero.
 7. ✓ SD card image + udev rules + install script changes (`kicker install`); open: the test on a Pi 4.
-8. End-to-end: backup → restore on a fresh server; an update from a locally signed test release, including a forced rollback (Playwright + a Go test).
+8. ✓ End-to-end: backup → restore on a fresh server through the setup wizard (`web/e2e/06-backup.spec.ts`); an update from a locally signed test release and a forced rollback, with a test-side "systemd" restarting `bin/current` (`server/e2e`, skipped with `go test -short`; `serve --update-health-delay` shortens the health check).
 
 ## 9. Decisions (owner, 2026-11-25)
 - **A. The binary lives in the data folder** (`<data>/bin/current`, set up by `kicker install`, §5), so the service updates itself without root. A compromised service already has all the data.
